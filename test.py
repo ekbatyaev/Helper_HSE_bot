@@ -1,6 +1,2 @@
-information = []
-information.append([10, 'Сколько времени', 'Ну привет'])
-information.append([1, 'hi', 'lol'])
-information.append([1, 'hi', 'lol'])
-information.sort()
-print(len(information))
+message_id = {}
+print(message_id.get(1341312))
