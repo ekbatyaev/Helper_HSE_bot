@@ -1,76 +1,19 @@
 import telebot
 import re
+import json
 import datetime
-import requests
-from telebot import types, TeleBot
+from telebot import types
 from telebot import custom_filters
 from telebot.handler_backends import State, StatesGroup
 from telebot.storage import StateMemoryStorage
-notion_token = "secret_N8zfGUMB144nM1TMojVYmSQtyMt2A5pu6RgyCmlcNL3"
-notion_page_id = "e4600d549cf444049fc51bdd438ad0aa"
-notion_database_id = notion_page_id
 state_storage = StateMemoryStorage()
-bot = telebot.TeleBot('7244080071:AAFOVCYOk1ImVfKvMkFn8AJTkN7aZkfFMkU', state_storage=state_storage)
+bot = telebot.TeleBot('1983601500:AAEOApoTcYx8C2NeWa4hWVzRUkxaf-o5TQA', state_storage=state_storage)
 
-def get_answer(pattern, page_id):
-    token = "secret_N8zfGUMB144nM1TMojVYmSQtyMt2A5pu6RgyCmlcNL3"
-
-    #page_id = "ec48b9dacec340808876fbaf0947d4e6"
-    headers = {
-        "Authorization": "Bearer " + token,
-        "Content-Type": "application/json",
-        "Notion-Version": "2022-06-28",
-    }
-    DATABASE_ID = page_id
-    def get_pages(num_pages=None):
-        url = f"https://api.notion.com/v1/databases/{DATABASE_ID}/query"
-        get_all = num_pages is None
-        page_size = 100 if get_all else num_pages
-        payload = {"page_size": page_size}
-        response = requests.post(url, json=payload, headers=headers)
-
-        data = response.json()
-        results = data["results"]
-
-        while data["has_more"] and get_all:
-            payload = {"page_size": page_size, "start_cursor": data["next_cursor"]}
-            url = f"https://api.notion.com/v1/databases/{DATABASE_ID}/query"
-            response = requests.post(url, json=payload, headers=headers)
-            data = response.json()
-            results.extend(data["results"])
-
-        return results
-
-    def extract_rich_text(rich_text_array):
-        content = ""
-        for item in rich_text_array:
-            text_content = item.get("text", {}).get("content", "")
-            annotations = item.get("annotations", {})
-
-            # Применяем форматирование
-            if annotations.get("bold"):
-                text_content = f"*{text_content}*"
-            if annotations.get("italic"):
-                text_content = f"_{text_content}_"
-            if annotations.get("underline"):
-                text_content = f"~{text_content}~"
-
-            content += text_content
-        return content
-
-    pages = get_pages()
+def get_answer(pattern, file_name):
     information = []
-
-    for page in pages:
-        page_id = page["id"]
-        props = page["properties"]
-        question = props.get("Вопрос", {}).get("title", [{}])[0].get("text", {}).get("content", "")
-        answer = props.get("Ответ", {}).get("rich_text", [])
-        formatted_answer = extract_rich_text(answer)
-        information.append([0, question, formatted_answer, 0])
-
-
-
+    data = load_data(file_name)
+    for i in range(len(data)):
+        information.append([0, data[i][0], data[i][1], 0])
 
     def minimum_changes(text, pattern):
         n = len(text)
@@ -132,86 +75,23 @@ def get_answer(pattern, page_id):
         message_for_user+= f"*Вопрос №{i+1}: *" + "\n" + f"_{information[i][1]}_" +'\n\n'
     return message_for_user
 
-def get_chat_info(page_id):
-    token = "secret_N8zfGUMB144nM1TMojVYmSQtyMt2A5pu6RgyCmlcNL3"
+def get_chat_info():
+    data = load_data("bot_work_moment.json")
+    get_chat_id(["ККО", data[0][0], data[0][1]])
 
-    # page_id = "ec48b9dacec340808876fbaf0947d4e6"
-    headers = {
-        "Authorization": "Bearer " + token,
-        "Content-Type": "application/json",
-        "Notion-Version": "2022-06-28",
-    }
-    DATABASE_ID = page_id
-
-    def get_pages(num_pages=None):
-        url = f"https://api.notion.com/v1/databases/{DATABASE_ID}/query"
-        get_all = num_pages is None
-        page_size = 100 if get_all else num_pages
-        payload = {"page_size": page_size}
-        response = requests.post(url, json=payload, headers=headers)
-        data = response.json()
-        results = data["results"]
-
-        while data["has_more"] and get_all:
-            payload = {"page_size": page_size, "start_cursor": data["next_cursor"]}
-            url = f"https://api.notion.com/v1/databases/{DATABASE_ID}/query"
-            response = requests.post(url, json=payload, headers=headers)
-            data = response.json()
-            results.extend(data["results"])
-
-        return results
-
-    page = get_pages()
-    chat_info = []
-    page_id = page[0]["id"]
-    props = page[0]["properties"]
-    Chat_name = props.get("Chat_name", {}).get("title", [{}])[0].get("text", {}).get("content", "")
-    workers = props.get("Workers", {}).get("rich_text", [{}])[0].get("text", {}).get("content", "")
-    chat_id = props.get("Chat_ID", {}).get("number", 0)
-    chat_info.append([Chat_name, workers, chat_id])
-    get_chat_id(chat_info[0])
-
-def get_questions(page_id):
-    token = "secret_N8zfGUMB144nM1TMojVYmSQtyMt2A5pu6RgyCmlcNL3"
-
-    #page_id = "ec48b9dacec340808876fbaf0947d4e6"
-    headers = {
-        "Authorization": "Bearer " + token,
-        "Content-Type": "application/json",
-        "Notion-Version": "2022-06-28",
-    }
-    DATABASE_ID = page_id
-    def get_pages(num_pages=None):
-        url = f"https://api.notion.com/v1/databases/{DATABASE_ID}/query"
-        get_all = num_pages is None
-        page_size = 100 if get_all else num_pages
-        payload = {"page_size": page_size}
-        response = requests.post(url, json=payload, headers=headers)
-
-        data = response.json()
-        results = data["results"]
-
-        while data["has_more"] and get_all:
-            payload = {"page_size": page_size, "start_cursor": data["next_cursor"]}
-            url = f"https://api.notion.com/v1/databases/{DATABASE_ID}/query"
-            response = requests.post(url, json=payload, headers=headers)
-            data = response.json()
-            results.extend(data["results"])
-
-        return results
-
-    pages = get_pages()
-    questions = []
+def get_questions(file_name):
+    data = load_data(file_name)
     list_str_questions = f"*Список вопросов: *" + '\n\n'
-    for page in pages:
-        page_id = page["id"]
-        props = page["properties"]
-        question = props.get("Вопрос", {}).get("title", [{}])[0].get("text", {}).get("content", "")
-        questions.append(question)
-    for i in range(len(questions)):
-        list_str_questions += f"*{i+1}) *" + f"_{questions[len(questions) - i - 1]}_" + "\n"
+    for i in range(len(data)):
+        list_str_questions += f"*{i+1}) *" + f"_{data[len(data) - i - 1][0]}_" + "\n"
     return list_str_questions
 
+def get_del_questions(file_name):
+    data = load_data(file_name)
+    list_str_questions = f"*Список вопросов: *" + '\n\n'
+    for i in range(len(data)):
+        list_str_questions += f"*{i}) *" + f"_{data[i][0]}_" + "\n"
+    return list_str_questions
 
 #Classes of States
 class MainStates (StatesGroup):
@@ -239,6 +119,13 @@ class KKO_group(StatesGroup):
     feedback_answer = State()
     check_answer = State()
     status_answer = State()
+
+class Machina_group(StatesGroup):
+    choose_fac = State()
+    choose_del_fac = State()
+    get_question = State()
+    get_ans = State()
+    delete_sentence = State()
 
 # KeyBoard
 markup = types.InlineKeyboardMarkup()
@@ -311,8 +198,7 @@ def start_message(message):
     bot.set_state(message.from_user.id, MainStates.start_state, message.chat.id)
 @bot.message_handler(commands=['feedback_message'])
 def feedback_message(message):
-    page_id = "0030e2cc086b4a9880ab236eb8228aa0"
-    get_chat_info(page_id)
+    get_chat_info()
     if message.chat.id == chat_information[2]:
         feedback_message = bot.send_message(chat_information[2], f"_Пришлите_" + f"* ID студента,*" + f"_ которому отвечаете._", parse_mode="Markdown")
         put_last_message_id(message.from_user.id, feedback_message.message_id)
@@ -321,15 +207,96 @@ def feedback_message(message):
 
 @bot.message_handler(commands=['request_to_kko'])
 def access_message(message):
-    page_id = "0030e2cc086b4a9880ab236eb8228aa0"
-    get_chat_info(page_id)
+    get_chat_info()
     feedback_message = bot.send_message(message.from_user.id,  f"*В данном отделе бота *" + f"_ты можешь отправить запрос в _" + f"*Комитет Качества Образования студсовета Вышки.*" + "\n\n" +
                                                              f"*Это стоит делать*" + f"_ в случае конфликтной ситуации при учебном процессе, не типового вопроса, не соответствии коэффициентов накопа и экзамена ПУДУ и в т.п случаях._", reply_markup = markup5, parse_mode="Markdown")
     put_last_message_id(message.from_user.id, feedback_message.message_id)
     bot.set_state(message.from_user.id, KKO_group.back_request)
 
+@bot.message_handler(commands=['add_quest_raketa'])
+def access_message(message):
+    #bot.delete_message(message.from_user.id, messages_id.get(message.from_user.id))
+    bot_first_message = bot.send_message(message.from_user.id, f"_Выбери свой факультет: _",
+                                               reply_markup=markup1,
+                                              parse_mode="Markdown")
+    put_last_message_id(message.from_user.id, bot_first_message.message_id)
+    #answer_message = bot.send_message(message.from_user.id, f"_Пришлите вопрос для добавления_",parse_mode="Markdown")
+    bot.set_state(message.from_user.id, Machina_group.choose_fac)
+
+@bot.message_handler(commands=['del_quest_raketa'])
+def del_message(message):
+    #bot.delete_message(message.from_user.id, messages_id.get(message.from_user.id))
+    bot_first_message = bot.send_message(message.from_user.id, f"_Выбери свой факультет: _",
+                                         reply_markup=markup1,
+                                         parse_mode="Markdown")
+    put_last_message_id(message.from_user.id, bot_first_message.message_id)
+    #answer_message = bot.send_message(message.from_user.id, f"_Пришлите вопрос для добавления_",parse_mode="Markdown")
+    bot.set_state(message.from_user.id, Machina_group.choose_del_fac)
+
 
 #States
+@bot.callback_query_handler(state=Machina_group.choose_del_fac, func = lambda callback: True)
+def machina_choose_fac(message):
+    bot.delete_message(message.from_user.id, messages_id.get(message.from_user.id))
+    if message.data == 'choice_1':
+        bot_choose_message = bot.send_message(message.from_user.id, f"{get_del_questions("fac_it.json")}" + "\n\n" + f"_Пришли индекс вопроса_", parse_mode="Markdown")
+        put_file_name("fac_it.json")
+        put_last_message_id(message.from_user.id, bot_choose_message.message_id)
+        bot.set_state(message.from_user.id, Machina_group.delete_sentence)
+    elif message.data == 'choice_2':
+        bot_choose_message = bot.send_message(message.from_user.id,
+                                              f"{get_del_questions("fac_gum.json")}" + "\n\n" + f"_Пришли индекс вопроса_",
+                                              parse_mode="Markdown")
+        put_file_name("fac_gum.json")
+        put_last_message_id(message.from_user.id, bot_choose_message.message_id)
+        bot.set_state(message.from_user.id, Machina_group.delete_sentence)
+    elif message.data == "choice_3":
+        bot_choose_message = bot.send_message(message.from_user.id,
+                                              f"{get_del_questions("fac_man.json")}" + "\n\n" + f"_Пришли индекс вопроса_",
+                                              parse_mode="Markdown")
+        put_file_name("fac_man.json")
+        put_last_message_id(message.from_user.id, bot_choose_message.message_id)
+        bot.set_state(message.from_user.id, Machina_group.delete_sentence)
+    elif message.data == "choice_4":
+        bot_choose_message = bot.send_message(message.from_user.id,
+                                              f"{get_del_questions("fac_law.json")}" + "\n\n" + f"_Пришли индекс вопроса_",
+                                              parse_mode="Markdown")
+        put_file_name("fac_law.json")
+        put_last_message_id(message.from_user.id, bot_choose_message.message_id)
+        bot.set_state(message.from_user.id, Machina_group.delete_sentence)
+    elif message.data == "choice_5":
+        bot_choose_message = bot.send_message(message.from_user.id,
+                                              f"{get_del_questions("fac_econ.json")}" + "\n\n" + f"_Пришли индекс вопроса_",
+                                              parse_mode="Markdown")
+        put_file_name("fac_econ.json")
+        put_last_message_id(message.from_user.id, bot_choose_message.message_id)
+        bot.set_state(message.from_user.id, Machina_group.delete_sentence)
+    else:
+        bot.set_state(message.from_user.id, MainStates.problem_types)
+
+@bot.callback_query_handler(state=Machina_group.choose_fac, func = lambda callback: True)
+def machina_choose_fac(message):
+    bot.delete_message(message.from_user.id, messages_id.get(message.from_user.id))
+    bot_choose_message = bot.send_message(message.from_user.id,f"_Пришлите вопрос для добавления_",
+                                          parse_mode="Markdown")
+    put_last_message_id(message.from_user.id, bot_choose_message.message_id)
+    if message.data == 'choice_1':
+        put_sentence(0, "fac_it.json")
+        bot.set_state(message.from_user.id, Machina_group.get_question)
+    elif message.data == 'choice_2':
+        put_sentence(0, "fac_gum.json")
+        bot.set_state(message.from_user.id, Machina_group.get_question)
+    elif message.data == "choice_3":
+        put_sentence(0, "fac_man.json")
+        bot.set_state(message.from_user.id, Machina_group.get_question)
+    elif message.data == "choice_4":
+        put_sentence(0, "fac_law.json")
+        bot.set_state(message.from_user.id, Machina_group.get_question)
+    elif message.data == "choice_5":
+        put_sentence(0, "fac_econ.json")
+        bot.set_state(message.from_user.id, Machina_group.get_question)
+    else:
+        bot.set_state(message.from_user.id, MainStates.problem_types)
 
 @bot.callback_query_handler(state=MainStates.start_state, func = lambda callback: True)
 def first_message(message):
@@ -357,6 +324,31 @@ def problem_types(message):
         bot.set_state(message.from_user.id, Back_fac.back_fac_econ)
     else:
         bot.set_state(message.from_user.id, MainStates.problem_types)
+@bot.message_handler(state=Machina_group.get_question)
+def get_question(message):
+    bot.delete_message(message.from_user.id, messages_id.get(message.from_user.id))
+    put_sentence(1, f"{message.text}")
+    get_answer_message = bot.send_message(message.from_user.id, f"_Пришлите ответ на вопрос_", parse_mode="Markdown")
+    put_last_message_id(message.from_user.id, get_answer_message.message_id)
+    bot.set_state(message.from_user.id, Machina_group.get_ans)
+
+@bot.message_handler(state=Machina_group.get_ans)
+def get_ans(message):
+    bot.delete_message(message.from_user.id, messages_id.get(message.from_user.id))
+    put_sentence(2, f"{message.text}")
+    get_answer_two_message = bot.send_message(message.from_user.id, f"_Все записано_", parse_mode="Markdown")
+    add_data(sentence[0], sentence[1], sentence[2])
+    print(sentence[0], sentence[1], sentence[2])
+    put_last_message_id(message.from_user.id, get_answer_two_message.message_id)
+    bot.set_state(message.from_user.id, MainStates.problem_types)
+
+@bot.message_handler(state=Machina_group.delete_sentence)
+def delete_sentence(message):
+    bot.delete_message(message.from_user.id, messages_id.get(message.from_user.id))
+    remove_data(file_name, int(message.text))
+    delete_message = bot.send_message(message.from_user.id, f"Удалено", parse_mode="Markdown")
+    put_last_message_id(message.from_user.id, delete_message.message_id)
+    bot.set_state(message.from_user.id, MainStates.problem_types)
 
 @bot.callback_query_handler(state = Back_fac.back_fac_it, func = lambda callback: True)
 def back_fac_it(message):
@@ -371,8 +363,7 @@ def back_fac_it(message):
         put_last_message_id(message.from_user.id, bot_go_fac_it_message.message_id)
         bot.set_state(message.from_user.id, Faculties_types.fac_it)
     elif message.data == 'support':
-        page_id = "0030e2cc086b4a9880ab236eb8228aa0"
-        get_chat_info(page_id)
+        get_chat_info()
         feedback_message = bot.send_message(message.from_user.id,
                                             f"*В данном отделе бота *" + f"_ты можешь отправить запрос в _" + f"*Комитет Качества Образования студсовета Вышки.*" + "\n\n" +
                                             f"*Это стоит делать*" + f"_ в случае конфликтной ситуации при учебном процессе, не типового вопроса, не соответствии коэффициентов накопа и экзамена ПУДУ и в т.п случаях._",
@@ -399,7 +390,7 @@ def back_fac_it(message):
         put_last_message_id(message.from_user.id, rephrase_mess.message_id)
         bot.set_state(message.from_user.id, Faculties_types.fac_it)
     elif message.data == 'question_list':
-        page_fac_id = 'ec48b9dacec340808876fbaf0947d4e6'
+        page_fac_id = "fac_it.json"
         bot.send_message(message.from_user.id, f"{get_questions(page_fac_id)}", parse_mode="Markdown")
         question_list_message = bot.send_message(message.from_user.id, f"*Вы хотите задать вопрос *" + f"_связанный с выбранным факультетом _"
                                          + f"*или обратиться *" + f"_Комитет качества образования?_"
@@ -420,8 +411,7 @@ def back_fac_gum(message):
         put_last_message_id(message.from_user.id, bot_go_fac_gum_message.message_id)
         bot.set_state(message.from_user.id, Faculties_types.fac_gum)
     elif message.data == 'support':
-        page_id = "0030e2cc086b4a9880ab236eb8228aa0"
-        get_chat_info(page_id)
+        get_chat_info()
         feedback_message = bot.send_message(message.from_user.id,
                                             f"*В данном отделе бота *" + f"_ты можешь отправить запрос в _" + f"*Комитет Качества Образования студсовета Вышки.*" + "\n\n" +
                                             f"*Это стоит делать*" + f"_ в случае конфликтной ситуации при учебном процессе, не типового вопроса, не соответствии коэффициентов накопа и экзамена ПУДУ и в т.п случаях._",
@@ -448,7 +438,7 @@ def back_fac_gum(message):
         put_last_message_id(message.from_user.id, rephrase_mess.message_id)
         bot.set_state(message.from_user.id, Faculties_types.fac_gum)
     elif message.data == 'question_list':
-        page_fac_id = '6c8ce3dbf4ac4394a64fa12b4b4a30ca'
+        page_fac_id = "fac_gum.json"
         bot.send_message(message.from_user.id, f"{get_questions(page_fac_id)}", parse_mode="Markdown")
         question_list_message = bot.send_message(message.from_user.id, f"*Вы хотите задать вопрос *" + f"_связанный с выбранным факультетом _"
                                          + f"*или обратиться *" + f"_Комитет качества образования?_"
@@ -469,8 +459,7 @@ def back_fac_man(message):
         put_last_message_id(message.from_user.id, bot_go_fac_man_message.message_id)
         bot.set_state(message.from_user.id, Faculties_types.fac_man)
     elif message.data == 'support':
-        page_id = "0030e2cc086b4a9880ab236eb8228aa0"
-        get_chat_info(page_id)
+        get_chat_info()
         feedback_message = bot.send_message(message.from_user.id,
                                             f"*В данном отделе бота *" + f"_ты можешь отправить запрос в _" + f"*Комитет Качества Образования студсовета Вышки.*" + "\n\n" +
                                             f"*Это стоит делать*" + f"_ в случае конфликтной ситуации при учебном процессе, не типового вопроса, не соответствии коэффициентов накопа и экзамена ПУДУ и в т.п случаях._",
@@ -497,7 +486,7 @@ def back_fac_man(message):
         put_last_message_id(message.from_user.id, rephrase_mess.message_id)
         bot.set_state(message.from_user.id, Faculties_types.fac_man)
     elif message.data == 'question_list':
-        page_fac_id = 'e0733dd88ae5408c8d8b09c36de0097c'
+        page_fac_id = 'fac_man.json'
         bot.send_message(message.from_user.id, f"{get_questions(page_fac_id)}", parse_mode="Markdown")
         question_list_message = bot.send_message(message.from_user.id, f"*Вы хотите задать вопрос *" + f"_связанный с выбранным факультетом _"
                                          + f"*или обратиться *" + f"_Комитет качества образования?_"
@@ -519,8 +508,7 @@ def back_fac_law(message):
         put_last_message_id(message.from_user.id, bot_go_fac_law_message.message_id)
         bot.set_state(message.from_user.id, Faculties_types.fac_law)
     elif message.data == 'support':
-        page_id = "0030e2cc086b4a9880ab236eb8228aa0"
-        get_chat_info(page_id)
+        get_chat_info()
         feedback_message = bot.send_message(message.from_user.id,
                                             f"*В данном отделе бота *" + f"_ты можешь отправить запрос в _" + f"*Комитет Качества Образования студсовета Вышки.*" + "\n\n" +
                                             f"*Это стоит делать*" + f"_ в случае конфликтной ситуации при учебном процессе, не типового вопроса, не соответствии коэффициентов накопа и экзамена ПУДУ и в т.п случаях._",
@@ -548,7 +536,7 @@ def back_fac_law(message):
         put_last_message_id(message.from_user.id, rephrase_mess.message_id)
         bot.set_state(message.from_user.id, Faculties_types.fac_law)
     elif message.data == 'question_list':
-        page_fac_id = 'b86417ae42c1423e8861ff59fa6d8e8a'
+        page_fac_id = 'fac_law.json'
         bot.send_message(message.from_user.id, f"{get_questions(page_fac_id)}", parse_mode="Markdown")
         question_list_message = bot.send_message(message.from_user.id, f"*Вы хотите задать вопрос *" + f"_связанный с выбранным факультетом _"
                                          + f"*или обратиться *" + f"_Комитет качества образования?_"
@@ -569,8 +557,7 @@ def back_fac_econ(message):
         put_last_message_id(message.from_user.id, bot_go_fac_econ_message.message_id)
         bot.set_state(message.from_user.id, Faculties_types.fac_econ)
     elif message.data == 'support':
-        page_id = "0030e2cc086b4a9880ab236eb8228aa0"
-        get_chat_info(page_id)
+        get_chat_info()
         feedback_message = bot.send_message(message.from_user.id,
                                             f"*В данном отделе бота *" + f"_ты можешь отправить запрос в _" + f"*Комитет Качества Образования студсовета Вышки.*" + "\n\n" +
                                             f"*Это стоит делать*" + f"_ в случае конфликтной ситуации при учебном процессе, не типового вопроса, не соответствии коэффициентов накопа и экзамена ПУДУ и в т.п случаях._",
@@ -597,7 +584,7 @@ def back_fac_econ(message):
         put_last_message_id(message.from_user.id, rephrase_mess.message_id)
         bot.set_state(message.from_user.id, Faculties_types.fac_econ)
     elif message.data == 'question_list':
-        page_fac_id = '596c82e5961c46d1b34a11586eeb1cf8'
+        page_fac_id = "fac_econ.json"
         bot.send_message(message.from_user.id, f"{get_questions(page_fac_id)}", parse_mode="Markdown")
         question_list_message = bot.send_message(message.from_user.id, f"*Вы хотите задать вопрос *" + f"_связанный с выбранным факультетом _"
                                          + f"*или обратиться *" + f"_Комитет качества образования?_"
@@ -607,7 +594,7 @@ def back_fac_econ(message):
 
 @bot.message_handler(state=Faculties_types.fac_it)
 def fac_it(message):
-    page_id_fac= 'ec48b9dacec340808876fbaf0947d4e6'
+    page_id_fac= 'fac_it.json'
     # log start
     current_data = datetime.date.today()
     current_time = datetime.datetime.now().time()
@@ -620,7 +607,7 @@ def fac_it(message):
 
 @bot.message_handler(state=Faculties_types.fac_gum)
 def fac_gum(message):
-    page_id_fac = '6c8ce3dbf4ac4394a64fa12b4b4a30ca'
+    page_id_fac = 'fac_gum.json'
     # log start
     current_data = datetime.date.today()
     current_time = datetime.datetime.now().time()
@@ -633,7 +620,7 @@ def fac_gum(message):
 
 @bot.message_handler(state=Faculties_types.fac_man)
 def fac_man(message):
-    page_id_fac = 'e0733dd88ae5408c8d8b09c36de0097c'
+    page_id_fac = 'fac_man.json'
     # log start
     current_data = datetime.date.today()
     current_time = datetime.datetime.now().time()
@@ -646,7 +633,7 @@ def fac_man(message):
 
 @bot.message_handler(state=Faculties_types.fac_law)
 def fac_law(message):
-    page_id_fac = 'b86417ae42c1423e8861ff59fa6d8e8a'
+    page_id_fac = 'fac_law.json'
     # log start
     current_data = datetime.date.today()
     current_time = datetime.datetime.now().time()
@@ -659,7 +646,7 @@ def fac_law(message):
 
 @bot.message_handler(state=Faculties_types.fac_econ)
 def fac_econ(message):
-    page_id_fac = '596c82e5961c46d1b34a11586eeb1cf8'
+    page_id_fac = 'fac_econ.json'
     # log start
     current_data = datetime.date.today()
     current_time = datetime.datetime.now().time()
@@ -782,11 +769,52 @@ def put_answer(storage):
     global answer
     answer = storage
 
+#Put the new sentence
+sentence = ['', '', '']
+def put_sentence(index, storage):
+    global sentence
+    sentence[index] = storage
+
+#Put file name
+file_name = ""
+def put_file_name(data_file):
+    global file_name
+    file_name = data_file
+
+
 #Messages id
 messages_id = {}
 def put_last_message_id(user_id, message_id):
     global messages_id
     messages_id[user_id] = message_id
+
+#Загрузка данных
+def load_data(data_file):
+    try:
+        with open(data_file, 'r', encoding='utf-8') as file:
+            return json.load(file)
+    except FileNotFoundError:
+        return []  # Если файл не существует, возвращаем пустой список
+#Сохранение данных
+def save_data(data_file, data):
+    with open(data_file, 'w', encoding='utf-8') as file:
+        json.dump(data, file, ensure_ascii=False, indent=4)
+
+#Добавление данных
+def add_data(file_name, col1, col2):
+    data = load_data(file_name)
+    data.append([col1, col2])
+    save_data(file_name, data)
+#Удаление данных
+
+def remove_data(file_name, index):
+    data = load_data(file_name)
+    if 0 <= index < len(data):
+        removed = data.pop(index)
+        save_data(file_name, data)
+        print(f"Удалены данные: {removed}")
+    else:
+        print("Некорректный индекс!")
 
 bot.add_custom_filter(custom_filters.StateFilter(bot))
 bot.infinity_polling(skip_pending=True)

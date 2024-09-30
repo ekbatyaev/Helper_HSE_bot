@@ -10,7 +10,7 @@ notion_token = "secret_N8zfGUMB144nM1TMojVYmSQtyMt2A5pu6RgyCmlcNL3"
 notion_page_id = "e4600d549cf444049fc51bdd438ad0aa"
 notion_database_id = notion_page_id
 state_storage = StateMemoryStorage()
-bot = telebot.TeleBot("7244080071:AAFOVCYOk1ImVfKvMkFn8AJTkN7aZkfFMkU", state_storage=state_storage)
+bot = telebot.TeleBot('7244080071:AAFOVCYOk1ImVfKvMkFn8AJTkN7aZkfFMkU', state_storage=state_storage)
 
 def get_answer(pattern, page_id):
     token = "secret_N8zfGUMB144nM1TMojVYmSQtyMt2A5pu6RgyCmlcNL3"
