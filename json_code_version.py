@@ -595,7 +595,7 @@ def back_fac_econ(message):
 
 @bot.message_handler(state=Faculties_types.fac_it)
 def fac_it(message):
-    page_id_fac= 'fac_it.json'
+    page_id_fac= 'data/fac_it.json'
     # log start
     current_data = datetime.date.today()
     current_time = datetime.datetime.now().time()
@@ -608,7 +608,7 @@ def fac_it(message):
 
 @bot.message_handler(state=Faculties_types.fac_gum)
 def fac_gum(message):
-    page_id_fac = 'fac_gum.json'
+    page_id_fac = 'data/fac_gum.json'
     # log start
     current_data = datetime.date.today()
     current_time = datetime.datetime.now().time()
@@ -621,7 +621,7 @@ def fac_gum(message):
 
 @bot.message_handler(state=Faculties_types.fac_man)
 def fac_man(message):
-    page_id_fac = 'fac_man.json'
+    page_id_fac = 'data/fac_man.json'
     # log start
     current_data = datetime.date.today()
     current_time = datetime.datetime.now().time()
@@ -634,7 +634,7 @@ def fac_man(message):
 
 @bot.message_handler(state=Faculties_types.fac_law)
 def fac_law(message):
-    page_id_fac = 'fac_law.json'
+    page_id_fac = 'data/fac_law.json'
     # log start
     current_data = datetime.date.today()
     current_time = datetime.datetime.now().time()
@@ -647,7 +647,7 @@ def fac_law(message):
 
 @bot.message_handler(state=Faculties_types.fac_econ)
 def fac_econ(message):
-    page_id_fac = 'fac_econ.json'
+    page_id_fac = 'data/fac_econ.json'
     # log start
     current_data = datetime.date.today()
     current_time = datetime.datetime.now().time()
