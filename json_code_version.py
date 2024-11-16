@@ -1,13 +1,14 @@
-import telebot
-import re
-import json
 import datetime
-from telebot import types
-from telebot import custom_filters
+import json
+import re
+
+import telebot
+from telebot import custom_filters, types
 from telebot.handler_backends import State, StatesGroup
 from telebot.storage import StateMemoryStorage
+from tokens_file import telegram_bot_token
 state_storage = StateMemoryStorage()
-bot = telebot.TeleBot('1983601500:AAEOApoTcYx8C2NeWa4hWVzRUkxaf-o5TQA', state_storage=state_storage)
+bot = telebot.TeleBot(telegram_bot_token, state_storage=state_storage)
 
 def get_answer(pattern, file_name):
     information = []
@@ -76,7 +77,7 @@ def get_answer(pattern, file_name):
     return message_for_user
 
 def get_chat_info():
-    data = load_data("bot_work_moment.json")
+    data = load_data("data/bot_work_moment.json")
     get_chat_id(["ККО", data[0][0], data[0][1]])
 
 def get_questions(file_name):
@@ -239,36 +240,36 @@ def del_message(message):
 def machina_choose_fac(message):
     bot.delete_message(message.from_user.id, messages_id.get(message.from_user.id))
     if message.data == 'choice_1':
-        bot_choose_message = bot.send_message(message.from_user.id, f"{get_del_questions("fac_it.json")}" + "\n\n" + f"_Пришли индекс вопроса_", parse_mode="Markdown")
-        put_file_name("fac_it.json")
+        bot_choose_message = bot.send_message(message.from_user.id, f"{get_del_questions("data/fac_it.json")}" + "\n\n" + f"_Пришли индекс вопроса_", parse_mode="Markdown")
+        put_file_name("data/fac_it.json")
         put_last_message_id(message.from_user.id, bot_choose_message.message_id)
         bot.set_state(message.from_user.id, Machina_group.delete_sentence)
     elif message.data == 'choice_2':
         bot_choose_message = bot.send_message(message.from_user.id,
-                                              f"{get_del_questions("fac_gum.json")}" + "\n\n" + f"_Пришли индекс вопроса_",
+                                              f"{get_del_questions("data/fac_gum.json")}" + "\n\n" + f"_Пришли индекс вопроса_",
                                               parse_mode="Markdown")
-        put_file_name("fac_gum.json")
+        put_file_name("data/fac_gum.json")
         put_last_message_id(message.from_user.id, bot_choose_message.message_id)
         bot.set_state(message.from_user.id, Machina_group.delete_sentence)
     elif message.data == "choice_3":
         bot_choose_message = bot.send_message(message.from_user.id,
-                                              f"{get_del_questions("fac_man.json")}" + "\n\n" + f"_Пришли индекс вопроса_",
+                                              f"{get_del_questions("data/fac_man.json")}" + "\n\n" + f"_Пришли индекс вопроса_",
                                               parse_mode="Markdown")
-        put_file_name("fac_man.json")
+        put_file_name("data/fac_man.json")
         put_last_message_id(message.from_user.id, bot_choose_message.message_id)
         bot.set_state(message.from_user.id, Machina_group.delete_sentence)
     elif message.data == "choice_4":
         bot_choose_message = bot.send_message(message.from_user.id,
-                                              f"{get_del_questions("fac_law.json")}" + "\n\n" + f"_Пришли индекс вопроса_",
+                                              f"{get_del_questions("data/fac_law.json")}" + "\n\n" + f"_Пришли индекс вопроса_",
                                               parse_mode="Markdown")
-        put_file_name("fac_law.json")
+        put_file_name("data/fac_law.json")
         put_last_message_id(message.from_user.id, bot_choose_message.message_id)
         bot.set_state(message.from_user.id, Machina_group.delete_sentence)
     elif message.data == "choice_5":
         bot_choose_message = bot.send_message(message.from_user.id,
-                                              f"{get_del_questions("fac_econ.json")}" + "\n\n" + f"_Пришли индекс вопроса_",
+                                              f"{get_del_questions("data/fac_econ.json")}" + "\n\n" + f"_Пришли индекс вопроса_",
                                               parse_mode="Markdown")
-        put_file_name("fac_econ.json")
+        put_file_name("data/fac_econ.json")
         put_last_message_id(message.from_user.id, bot_choose_message.message_id)
         bot.set_state(message.from_user.id, Machina_group.delete_sentence)
     else:
@@ -390,7 +391,7 @@ def back_fac_it(message):
         put_last_message_id(message.from_user.id, rephrase_mess.message_id)
         bot.set_state(message.from_user.id, Faculties_types.fac_it)
     elif message.data == 'question_list':
-        page_fac_id = "fac_it.json"
+        page_fac_id = "data/fac_it.json"
         bot.send_message(message.from_user.id, f"{get_questions(page_fac_id)}", parse_mode="Markdown")
         question_list_message = bot.send_message(message.from_user.id, f"*Вы хотите задать вопрос *" + f"_связанный с выбранным факультетом _"
                                          + f"*или обратиться *" + f"_Комитет качества образования?_"
@@ -438,7 +439,7 @@ def back_fac_gum(message):
         put_last_message_id(message.from_user.id, rephrase_mess.message_id)
         bot.set_state(message.from_user.id, Faculties_types.fac_gum)
     elif message.data == 'question_list':
-        page_fac_id = "fac_gum.json"
+        page_fac_id = "data/fac_gum.json"
         bot.send_message(message.from_user.id, f"{get_questions(page_fac_id)}", parse_mode="Markdown")
         question_list_message = bot.send_message(message.from_user.id, f"*Вы хотите задать вопрос *" + f"_связанный с выбранным факультетом _"
                                          + f"*или обратиться *" + f"_Комитет качества образования?_"
@@ -486,7 +487,7 @@ def back_fac_man(message):
         put_last_message_id(message.from_user.id, rephrase_mess.message_id)
         bot.set_state(message.from_user.id, Faculties_types.fac_man)
     elif message.data == 'question_list':
-        page_fac_id = 'fac_man.json'
+        page_fac_id = 'data/fac_man.json'
         bot.send_message(message.from_user.id, f"{get_questions(page_fac_id)}", parse_mode="Markdown")
         question_list_message = bot.send_message(message.from_user.id, f"*Вы хотите задать вопрос *" + f"_связанный с выбранным факультетом _"
                                          + f"*или обратиться *" + f"_Комитет качества образования?_"
@@ -536,7 +537,7 @@ def back_fac_law(message):
         put_last_message_id(message.from_user.id, rephrase_mess.message_id)
         bot.set_state(message.from_user.id, Faculties_types.fac_law)
     elif message.data == 'question_list':
-        page_fac_id = 'fac_law.json'
+        page_fac_id = 'data/fac_law.json'
         bot.send_message(message.from_user.id, f"{get_questions(page_fac_id)}", parse_mode="Markdown")
         question_list_message = bot.send_message(message.from_user.id, f"*Вы хотите задать вопрос *" + f"_связанный с выбранным факультетом _"
                                          + f"*или обратиться *" + f"_Комитет качества образования?_"
@@ -584,7 +585,7 @@ def back_fac_econ(message):
         put_last_message_id(message.from_user.id, rephrase_mess.message_id)
         bot.set_state(message.from_user.id, Faculties_types.fac_econ)
     elif message.data == 'question_list':
-        page_fac_id = "fac_econ.json"
+        page_fac_id = "data/fac_econ.json"
         bot.send_message(message.from_user.id, f"{get_questions(page_fac_id)}", parse_mode="Markdown")
         question_list_message = bot.send_message(message.from_user.id, f"*Вы хотите задать вопрос *" + f"_связанный с выбранным факультетом _"
                                          + f"*или обратиться *" + f"_Комитет качества образования?_"

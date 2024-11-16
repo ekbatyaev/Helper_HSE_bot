@@ -1,19 +1,21 @@
-import telebot
-import re
 import datetime
+import re
+
 import requests
-from telebot import types
-from telebot import custom_filters
+import telebot
+from telebot import custom_filters, types
 from telebot.handler_backends import State, StatesGroup
 from telebot.storage import StateMemoryStorage
-notion_token = "secret_N8zfGUMB144nM1TMojVYmSQtyMt2A5pu6RgyCmlcNL3"
+from tokens_file import telegram_bot_token, notion_token
+
+notion_token = notion_token
 notion_page_id = "e4600d549cf444049fc51bdd438ad0aa"
 notion_database_id = notion_page_id
 state_storage = StateMemoryStorage()
-bot = telebot.TeleBot('7244080071:AAFOVCYOk1ImVfKvMkFn8AJTkN7aZkfFMkU', state_storage=state_storage)
+bot = telebot.TeleBot(telegram_bot_token, state_storage=state_storage)
 
 def get_answer(pattern, page_id):
-    token = "secret_N8zfGUMB144nM1TMojVYmSQtyMt2A5pu6RgyCmlcNL3"
+    token = notion_token
 
     #page_id = "ec48b9dacec340808876fbaf0947d4e6"
     headers = {
