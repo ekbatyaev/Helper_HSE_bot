@@ -363,6 +363,7 @@ async def start_process(message: Message, state: FSMContext):
                                              f"*А также получить оперативный ответ от представителей ККО студсовета Вышки.*",
                                              reply_markup=get_started(), parse_mode="Markdown")
         await state.update_data(last_message_id=first_message.message_id)
+        await state.update_data(message_edit = first_message)
     await state.set_state(MainStates.start_state)
 
 
@@ -398,8 +399,9 @@ async def access_message(message: Message, state: FSMContext):
 async def role_process(call: CallbackQuery, state: FSMContext):
     data = await state.get_data()
     last_message_id = data.get("last_message_id")
+    message_edit = data.get("message_edit")
     await asyncio.sleep(0.5)
-    faculty_question = await last_message_id.edit_text(f"_Выбери свой факультет: _",
+    faculty_question = await message_edit.edit_text(f"_Выбери свой факультет: _",
                                                     reply_markup = get_faculty(), parse_mode = "Markdown")
     await state.update_data(last_message_id=faculty_question.message_id)
     await state.set_state(MainStates.problem_types)
@@ -517,7 +519,7 @@ async def back(call: CallbackQuery, state: FSMContext):
     await state.update_data(last_message_id=support_message.message_id)
     await state.set_state(KKO_group.back_request)
 
-@user_router.callback_query('answer' in F.data, Back_fac.back_fac_it)
+@user_router.callback_query(F.data.count("answer"), Back_fac.back_fac_it)
 async def back(call: CallbackQuery, state: FSMContext):
     data = await state.get_data()
     last_message_id = data.get("last_message_id")
@@ -550,7 +552,7 @@ async def back(call: CallbackQuery, state: FSMContext):
         await bot.delete_message(chat_id=call.from_user.id, message_id=last_message_id)  # Удаление последнего сообщения
     await asyncio.sleep(0.5)
     page_fac_id = 'ec48b9dacec340808876fbaf0947d4e6'
-    await call.message.answer(f"{get_questions(page_fac_id)}", parse_mode="Markdown")
+    await call.message.answer(f"{await get_questions(page_fac_id)}", parse_mode="Markdown")
     question_list_message = await call.message.answer(f"*Вы хотите задать вопрос *" + f"_связанный с выбранным факультетом _"
                                                  + f"*или обратиться *" + f"_Комитет качества образования?_"
                                                  , reply_markup=get_main_options_choice(), parse_mode="Markdown")
@@ -596,7 +598,7 @@ async def back(call: CallbackQuery, state: FSMContext):
     await state.update_data(last_message_id=support_message.message_id)
     await state.set_state(KKO_group.back_request)
 
-@user_router.callback_query('answer' in F.data, Back_fac.back_fac_gum)
+@user_router.callback_query(F.data.count("answer"), Back_fac.back_fac_gum)
 async def back(call: CallbackQuery, state: FSMContext):
     data = await state.get_data()
     last_message_id = data.get("last_message_id")
@@ -629,7 +631,7 @@ async def back(call: CallbackQuery, state: FSMContext):
         await bot.delete_message(chat_id=call.from_user.id, message_id=last_message_id)  # Удаление последнего сообщения
     await asyncio.sleep(0.5)
     page_fac_id = '6c8ce3dbf4ac4394a64fa12b4b4a30ca'
-    await call.message.answer(f"{get_questions(page_fac_id)}", parse_mode="Markdown")
+    await call.message.answer(f"{await get_questions(page_fac_id)}", parse_mode="Markdown")
     question_list_message = await call.message.answer(f"*Вы хотите задать вопрос *" + f"_связанный с выбранным факультетом _"
                                                  + f"*или обратиться *" + f"_Комитет качества образования?_"
                                                  , reply_markup=get_main_options_choice(), parse_mode="Markdown")
@@ -675,7 +677,7 @@ async def back(call: CallbackQuery, state: FSMContext):
     await state.update_data(last_message_id=support_message.message_id)
     await state.set_state(KKO_group.back_request)
 
-@user_router.callback_query('answer' in F.data, Back_fac.back_fac_man)
+@user_router.callback_query(F.data.count("answer"), Back_fac.back_fac_man)
 async def back(call: CallbackQuery, state: FSMContext):
     data = await state.get_data()
     last_message_id = data.get("last_message_id")
@@ -708,7 +710,7 @@ async def back(call: CallbackQuery, state: FSMContext):
         await bot.delete_message(chat_id=call.from_user.id, message_id=last_message_id)  # Удаление последнего сообщения
     await asyncio.sleep(0.5)
     page_fac_id = 'e0733dd88ae5408c8d8b09c36de0097c'
-    await call.message.answer(f"{get_questions(page_fac_id)}", parse_mode="Markdown")
+    await call.message.answer(f"{await get_questions(page_fac_id)}", parse_mode="Markdown")
     question_list_message = await call.message.answer(f"*Вы хотите задать вопрос *" + f"_связанный с выбранным факультетом _"
                                                  + f"*или обратиться *" + f"_Комитет качества образования?_"
                                                  , reply_markup=get_main_options_choice(), parse_mode="Markdown")
@@ -754,7 +756,7 @@ async def back(call: CallbackQuery, state: FSMContext):
     await state.update_data(last_message_id=support_message.message_id)
     await state.set_state(KKO_group.back_request)
 
-@user_router.callback_query('answer' in F.data, Back_fac.back_fac_law)
+@user_router.callback_query(F.data.count("answer"), Back_fac.back_fac_law)
 async def back(call: CallbackQuery, state: FSMContext):
     data = await state.get_data()
     last_message_id = data.get("last_message_id")
@@ -787,7 +789,7 @@ async def back(call: CallbackQuery, state: FSMContext):
         await bot.delete_message(chat_id=call.from_user.id, message_id=last_message_id)  # Удаление последнего сообщения
     await asyncio.sleep(0.5)
     page_fac_id = 'b86417ae42c1423e8861ff59fa6d8e8a'
-    await call.message.answer(f"{get_questions(page_fac_id)}", parse_mode="Markdown")
+    await call.message.answer(f"{await get_questions(page_fac_id)}", parse_mode="Markdown")
     question_list_message = await call.message.answer(f"*Вы хотите задать вопрос *" + f"_связанный с выбранным факультетом _"
                                                  + f"*или обратиться *" + f"_Комитет качества образования?_"
                                                  , reply_markup=get_main_options_choice(), parse_mode="Markdown")
@@ -833,7 +835,7 @@ async def back(call: CallbackQuery, state: FSMContext):
     await state.update_data(last_message_id=support_message.message_id)
     await state.set_state(KKO_group.back_request)
 
-@user_router.callback_query('answer' in F.data, Back_fac.back_fac_econ)
+@user_router.callback_query(F.data.count("answer"), Back_fac.back_fac_econ)
 async def back(call: CallbackQuery, state: FSMContext):
     data = await state.get_data()
     last_message_id = data.get("last_message_id")
@@ -866,7 +868,7 @@ async def back(call: CallbackQuery, state: FSMContext):
         await bot.delete_message(chat_id=call.from_user.id, message_id=last_message_id)  # Удаление последнего сообщения
     await asyncio.sleep(0.5)
     page_fac_id = '596c82e5961c46d1b34a11586eeb1cf8'
-    await call.message.answer(f"{get_questions(page_fac_id)}", parse_mode="Markdown")
+    await call.message.answer(f"{await get_questions(page_fac_id)}", parse_mode="Markdown")
     question_list_message = await call.message.answer(f"*Вы хотите задать вопрос *" + f"_связанный с выбранным факультетом _"
                                                  + f"*или обратиться *" + f"_Комитет качества образования?_"
                                                  , reply_markup=get_main_options_choice(), parse_mode="Markdown")
@@ -877,7 +879,7 @@ async def back(call: CallbackQuery, state: FSMContext):
 async def answer_options(message: Message, state: FSMContext):
     async with ChatActionSender.typing(bot=bot, chat_id=message.chat.id):
         page_id_fac = 'ec48b9dacec340808876fbaf0947d4e6'
-        answer_bot_message = await message.answer(f"{get_answer(message.text, page_id_fac)}",
+        answer_bot_message = await message.answer(f"{await get_answer(message.text, page_id_fac)}",
                                           reply_markup=choice_needed_question(), parse_mode="Markdown")
         await state.update_data(last_message_id=answer_bot_message.message_id)
         await state.set_state(Back_fac.back_fac_it)
@@ -886,7 +888,7 @@ async def answer_options(message: Message, state: FSMContext):
 async def answer_options(message: Message, state: FSMContext):
     async with ChatActionSender.typing(bot=bot, chat_id=message.chat.id):
         page_id_fac = '6c8ce3dbf4ac4394a64fa12b4b4a30ca'
-        answer_bot_message = await message.answer(f"{get_answer(message.text, page_id_fac)}",
+        answer_bot_message = await message.answer(f"{await get_answer(message.text, page_id_fac)}",
                                           reply_markup=choice_needed_question(), parse_mode="Markdown")
         await state.update_data(last_message_id=answer_bot_message.message_id)
         await state.set_state(Back_fac.back_fac_gum)
@@ -895,7 +897,7 @@ async def answer_options(message: Message, state: FSMContext):
 async def answer_options(message: Message, state: FSMContext):
     async with ChatActionSender.typing(bot=bot, chat_id=message.chat.id):
         page_id_fac = 'e0733dd88ae5408c8d8b09c36de0097c'
-        answer_bot_message = await message.answer(f"{get_answer(message.text, page_id_fac)}",
+        answer_bot_message = await message.answer(f"{await get_answer(message.text, page_id_fac)}",
                                           reply_markup=choice_needed_question(), parse_mode="Markdown")
         await state.update_data(last_message_id=answer_bot_message.message_id)
         await state.set_state(Back_fac.back_fac_man)
@@ -904,7 +906,7 @@ async def answer_options(message: Message, state: FSMContext):
 async def answer_options(message: Message, state: FSMContext):
     async with ChatActionSender.typing(bot=bot, chat_id=message.chat.id):
         page_id_fac = 'b86417ae42c1423e8861ff59fa6d8e8a'
-        answer_bot_message = await message.answer(f"{get_answer(message.text, page_id_fac)}",
+        answer_bot_message = await message.answer(f"{await get_answer(message.text, page_id_fac)}",
                                           reply_markup=choice_needed_question(), parse_mode="Markdown")
         await state.update_data(last_message_id=answer_bot_message.message_id)
         await state.set_state(Back_fac.back_fac_law)
@@ -913,7 +915,7 @@ async def answer_options(message: Message, state: FSMContext):
 async def answer_options(message: Message, state: FSMContext):
     async with ChatActionSender.typing(bot=bot, chat_id=message.chat.id):
         page_id_fac = '596c82e5961c46d1b34a11586eeb1cf8'
-        answer_bot_message = await message.answer(f"{get_answer(message.text, page_id_fac)}",
+        answer_bot_message = await message.answer(f"{await get_answer(message.text, page_id_fac)}",
                                           reply_markup=choice_needed_question(), parse_mode="Markdown")
         await state.update_data(last_message_id=answer_bot_message.message_id)
         await state.set_state(Back_fac.back_fac_econ)
