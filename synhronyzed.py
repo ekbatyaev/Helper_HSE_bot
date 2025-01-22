@@ -2,6 +2,7 @@ import logging
 import asyncio
 import re
 import requests
+import schedule
 from aiogram import Bot, Dispatcher
 from aiogram.filters.command import Command
 from aiogram.fsm.context import FSMContext
@@ -10,6 +11,8 @@ from aiogram import Router, F
 from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup, Message, CallbackQuery
 from aiogram.utils.chat_action import ChatActionSender
 from aiogram.fsm.storage.memory import MemoryStorage
+
+from schedule import send_schedule
 from tokens_file import telegram_bot_token, notion_token
 
 notion_token = notion_token
@@ -285,6 +288,7 @@ def get_main_options_choice():
     keyboard_list = [
         [InlineKeyboardButton(text='Задать вопрос', callback_data='ask_question')],
         [InlineKeyboardButton(text='Список вопросов', callback_data='question_list')],
+        [InlineKeyboardButton(text='Узнать расписание', callback_data='get_schedule')],
         [InlineKeyboardButton(text='Обратиться в ККО', callback_data='support')],
         [InlineKeyboardButton(text='Назад', callback_data='back')]
     ]
@@ -543,6 +547,20 @@ async def back(call: CallbackQuery, state: FSMContext):
                                          f"*Пример: *" + f"_Получить справку об обучении КНТ._", parse_mode="Markdown")
     await state.update_data(last_message_id=rephrase_message.message_id)
     await state.set_state(Faculties_types.fac_it)
+
+@user_router.callback_query(F.data == 'get_schedule', Back_fac.back_fac_it)
+async def back(call: CallbackQuery, state: FSMContext):
+    data = await state.get_data()
+    last_message_id = data.get("last_message_id")
+    if last_message_id:
+        await bot.delete_message(chat_id=call.from_user.id, message_id=last_message_id)  # Удаление последнего сообщения
+    await asyncio.sleep(0.5)
+    rephrase_message = await call.message.answer(f"{await send_schedule()}", parse_mode="Markdown" )
+    main_choice = await call.message.answer(f"*Вы хотите задать вопрос *" + f"_связанный с выбранным факультетом _"
+                                            + f"*или обратиться *" + f"_Комитет качества образования?_"
+                                            , reply_markup=get_main_options_choice(), parse_mode="Markdown")
+    await state.update_data(last_message_id=main_choice.message_id)
+    await state.set_state(Back_fac.back_fac_it)
 
 @user_router.callback_query(F.data == 'question_list', Back_fac.back_fac_it)
 async def back(call: CallbackQuery, state: FSMContext):
@@ -1088,7 +1106,6 @@ def get_chat_id(storage_chat):
 
 # Last answer for user
 answer = ['', '', '']
-
 
 def put_answer(storage):
     global answer
