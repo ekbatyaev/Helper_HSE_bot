@@ -2,7 +2,6 @@ import logging
 import asyncio
 import re
 import requests
-import schedule
 from aiogram import Bot, Dispatcher
 from aiogram.filters.command import Command
 from aiogram.fsm.context import FSMContext
@@ -12,7 +11,7 @@ from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup, Message, C
 from aiogram.utils.chat_action import ChatActionSender
 from aiogram.fsm.storage.memory import MemoryStorage
 
-from schedule import send_schedule
+from modules.schedule import send_schedule
 from tokens_file import telegram_bot_token, notion_token
 
 notion_token = notion_token

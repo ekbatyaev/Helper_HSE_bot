@@ -8,7 +8,7 @@ async def send_schedule():
     #url = 'https://docs.google.com/spreadsheets/d/1LTtSol8D7vXeYGZVmE7yGDSYE4jV3MKY7IustIcY8Jk/export?format=xlsx'
 
     # Папка для сохранения файла
-    folder_path = 'расписания'
+    folder_path = '../list_of_schedules'
     os.makedirs(folder_path, exist_ok=True)
     file_path = os.path.join(folder_path, 'table.xlsx')
 
