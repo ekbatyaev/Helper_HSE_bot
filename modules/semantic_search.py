@@ -1,3 +1,5 @@
+import asyncio
+
 import torch
 import requests
 from transformers import AutoTokenizer, AutoModel
@@ -54,55 +56,92 @@ async def parse_questions():
         props = page["properties"]
         question = props.get("Вопрос", {}).get("title", [{}])[0].get("text", {}).get("content", "")
         answer = props.get("Ответ", {}).get("rich_text", [])
-        formatted_answer = extract_rich_text(answer)
+        formatted_answer = await extract_rich_text(answer)
         information.append([0, question, formatted_answer])
     return information
 
-async def load_embeddings():
-    information = parse_questions()
-    # Загружаем токенизатор и модель
+
+async def get_embeddings(texts):
     model_name = "intfloat/multilingual-e5-large"
     tokenizer = AutoTokenizer.from_pretrained(model_name)
     model = AutoModel.from_pretrained(model_name)
+    inputs = tokenizer(texts, padding=True, truncation=True, return_tensors="pt")
+    with torch.no_grad():
+        outputs = model(**inputs)
+    return outputs.last_hidden_state[:, 0, :]  # Берем CLS-токен
 
+async def load_embeddings():
+    information = await parse_questions()
+    # Загружаем токенизатор и модель
+
+    questions = []
     # Функция для преобразования текста в эмбеддинги
-    def get_embeddings(texts):
-        inputs = tokenizer(texts, padding=True, truncation=True, return_tensors="pt")
-        with torch.no_grad():
-            outputs = model(**inputs)
-        return outputs.last_hidden_state[:, 0, :]  # Берем CLS-токен
+
+    for cell in information:
+        questions.append(cell[1])
 
     # Преобразуем все вопросы в эмбеддинги
-    question_embeddings = get_embeddings(questions[0])
-    user_question_embeddings = get_embeddings(user_questions)
+    questions_embeddings = await get_embeddings(questions)
 
-    # Вычисляем косинусное сходство между каждым вопросом и пользовательскими вопросами
-    similarities = cosine_similarity(
-        question_embeddings.unsqueeze(1), user_question_embeddings.unsqueeze(0), dim=-1
-    )
+    print(questions_embeddings)
+
+    for i in range (len(information)):
+        information[i][0] = questions_embeddings[i]
+
+    return information
+
+    # # Вычисляем косинусное сходство между каждым вопросом и пользовательскими вопросами
+    # similarities = cosine_similarity(
+    #     question_embeddings.unsqueeze(1), user_question_embeddings.unsqueeze(0), dim=-1
+    # )
 
     # Находим самый похожий пользовательский вопрос для каждого вопроса
-    results = []
-    for i in range(len(questions)):
-        best_match_idx = torch.argmax(similarities[i]).item()
-        best_score = similarities[i][best_match_idx].item()
-        best_match = user_questions[best_match_idx]
-        results.append([questions[i], best_score, best_match])
+    # results = []
+    # for i in range(len(questions)):
+    #     best_match_idx = torch.argmax(similarities[i]).item()
+    #     best_score = similarities[i][best_match_idx].item()
+    #     best_match = user_questions[best_match_idx]
+    #     results.append([questions[i], best_score, best_match])
 
-    # Выводим результаты
-    for result in results:
-        print(f"Вопрос: {result[0]}")
-        print(f"Лучший матч: {result[2]}")
-        print(f"Схожесть: {result[1]:.4f}")
-        print("-" * 50)
+async def search(user_question):
+    work_info = pre_work_info
+    # Преобразуем вопрос пользователя в эмбеддинг
+    user_question_emb = await get_embeddings(user_question)
+    model_name = "intfloat/multilingual-e5-large"
+    tokenizer = AutoTokenizer.from_pretrained(model_name)
+    model = AutoModel.from_pretrained(model_name)
+    database_questions_embed = []
+    for cell in pre_work_info:
+        database_questions_embed.append(cell[0])
+    print(database_questions_embed)
+    database_questions_embed = torch.stack(database_questions_embed)
+    # Вычисляем косинусное сходство между каждым вопросом и пользовательскими вопросами
+    similarities = cosine_similarity(
+        user_question_emb.unsqueeze(1), database_questions_embed.unsqueeze(0), dim=-1
+    )
 
-    for result in results:
-        print(result[0])
+    #Находим самый похожий пользовательский вопрос для каждого вопроса
 
-    print("\n\n")
-    for result in results:
-        print(f"{result[1]:.5f}")
+    # Проверяем размерность similarities
+    print("similarities shape:", similarities.shape)
+    print("similarities:", similarities)
 
-    print("\n\n")
-    for result in results:
-        print(result[2])
+    if similarities.numel() == 0:
+        raise ValueError("Ошибка: similarities пустой!")
+
+    best_match_idx = similarities.argmax().item()  # Индекс наибольшего сходства
+
+    if best_match_idx >= len(work_info):
+        raise IndexError(f"Ошибка: best_match_idx ({best_match_idx}) выходит за границы {len(work_info)}")
+
+    best_match = work_info[best_match_idx][1]
+    best_score = similarities.flatten()[best_match_idx].item()  # Исправлено для корректного доступа
+
+    print("answer: "  + str(user_question) + str(best_score) + str(best_match))
+
+
+if __name__ == '__main__':
+    global pre_work_info
+    pre_work_info = asyncio.run(load_embeddings())
+    print(asyncio.run(search("Smart lms")))
+    #print(pre_work_info)
