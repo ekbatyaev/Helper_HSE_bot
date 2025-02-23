@@ -1,9 +1,15 @@
 import asyncio
+import os
+
 import torch
 import requests
+import json
+import numpy as np
 from transformers import AutoTokenizer, AutoModel
 from torch.nn.functional import cosine_similarity
 from tokens_file import notion_token
+
+
 
 TOKEN = notion_token
 PAGE_ID = "ec48b9dacec340808876fbaf0947d4e6"
@@ -14,8 +20,6 @@ HEADERS = {
 }
 DATABASE_ID = PAGE_ID
 MODEL_NAME= "intfloat/multilingual-e5-large"
-
-
 async def get_pages(num_pages=None):
     url = f"https://api.notion.com/v1/databases/{DATABASE_ID}/query"
     get_all = num_pages is None
@@ -30,6 +34,7 @@ async def get_pages(num_pages=None):
         data = response.json()
         results.extend(data["results"])
     return results
+
 
 async def extract_rich_text(rich_text_array):
     content = ""
@@ -68,15 +73,28 @@ async def get_embeddings(texts):
 
 async def load_embeddings():
     information = await parse_questions()
-    questions = [cell[1] for cell in information]
-    questions_embeddings = await get_embeddings(questions)
+    data = await load_data("../../../../Downloads/Telegram Desktop/emb_info.json")
+    print(data)
+    if data["fac_it"] != len(information):
+        questions = [cell[1] for cell in information]
+        questions_embeddings = await get_embeddings(questions)
+        data["fac_it"] = len(information)
+        np.save("embeddings.npy", questions_embeddings)
+        await save_data("../../../../Downloads/Telegram Desktop/emb_info.json", data)
+    elif os.path.exists("embeddings.npy"):
+        questions_embeddings = np.load("embeddings.npy")
+    else:
+        questions = [cell[1] for cell in information]
+        questions_embeddings = await get_embeddings(questions)
+        np.save("embeddings.npy", questions_embeddings)
     for i, emb in enumerate(questions_embeddings):
         information[i][0] = emb
-    return information
+    global pre_work_info
+    pre_work_info = information
 
 async def search(user_question):
     user_question_emb = await get_embeddings(user_question)
-    database_questions_embed = torch.stack([cell[0] for cell in pre_work_info])
+    database_questions_embed = torch.stack([torch.as_tensor(cell[0]) for cell in pre_work_info])
     similarities = cosine_similarity(
         user_question_emb.unsqueeze(1), database_questions_embed.unsqueeze(0), dim=-1
     )
@@ -90,7 +108,21 @@ async def search(user_question):
     best_score = similarities.flatten()[best_match_idx].item()  # Исправлено для корректного доступа
     print("answer: "  + str(user_question) + " " + str(best_score) + " " + str(best_match))
 
+#Загрузка данных из файла
+
+async def load_data(data_file):
+    try:
+        with open(data_file, 'r', encoding='utf-8') as file:
+            return json.load(file)
+    except FileNotFoundError:
+        return []  # Если файл не существует, возвращаем пустой список
+
+#Сохранение данных
+
+async def save_data(data_file, data):
+    with open(data_file, 'w', encoding='utf-8') as file:
+        json.dump(data, file, ensure_ascii=False, indent=4)
+
 if __name__ == "__main__":
-    global pre_work_info
-    pre_work_info = asyncio.run(load_embeddings())
+    asyncio.run(load_embeddings())
     asyncio.run(search("Smart lms"))
