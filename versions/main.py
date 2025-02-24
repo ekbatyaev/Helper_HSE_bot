@@ -1,6 +1,5 @@
 import logging
 import asyncio
-import re
 import requests
 from aiogram import Bot, Dispatcher
 from aiogram.filters.command import Command
@@ -10,13 +9,10 @@ from aiogram import Router, F
 from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup, Message, CallbackQuery
 from aiogram.utils.chat_action import ChatActionSender
 from aiogram.fsm.storage.memory import MemoryStorage
-
+from modules.semantic_search import search
 from modules.schedule import send_schedule
-from tokens_file import telegram_bot_token, notion_token
+from tokens_file import telegram_bot_token, notion_token, support_page_id
 
-notion_token = notion_token
-notion_page_id = "e4600d549cf444049fc51bdd438ad0aa"
-notion_database_id = notion_page_id
 # Обработчик следования пользователя
 user_router = Router()
 
@@ -31,154 +27,36 @@ dp = Dispatcher(storage=MemoryStorage())
 # Регистрация маршрутизатора
 dp.include_router(user_router)
 
+#Глобальные функции для получения внешних данных
 
-async def get_answer(pattern, page_id):
-    token = notion_token
+#Функция для получения данных поддержки
 
-    # page_id = "ec48b9dacec340808876fbaf0947d4e6"
-    headers = {
-        "Authorization": "Bearer " + token,
-        "Content-Type": "application/json",
-        "Notion-Version": "2022-06-28",
-    }
-    DATABASE_ID = page_id
+async def get_pages(page_id, headers, num_pages=None):
+    url = f"https://api.notion.com/v1/databases/{page_id}/query"
+    get_all = num_pages is None
+    page_size = 100 if get_all else num_pages
+    payload = {"page_size": page_size}
+    response = requests.post(url, json=payload, headers=headers)
+    data = response.json()
+    results = data["results"]
 
-    async def get_pages(num_pages=None):
-        url = f"https://api.notion.com/v1/databases/{DATABASE_ID}/query"
-        get_all = num_pages is None
-        page_size = 100 if get_all else num_pages
-        payload = {"page_size": page_size}
+    while data["has_more"] and get_all:
+        payload = {"page_size": page_size, "start_cursor": data["next_cursor"]}
+        url = f"https://api.notion.com/v1/databases/{page_id}/query"
         response = requests.post(url, json=payload, headers=headers)
-
         data = response.json()
-        results = data["results"]
+        results.extend(data["results"])
 
-        while data["has_more"] and get_all:
-            payload = {"page_size": page_size, "start_cursor": data["next_cursor"]}
-            url = f"https://api.notion.com/v1/databases/{DATABASE_ID}/query"
-            response = requests.post(url, json=payload, headers=headers)
-            data = response.json()
-            results.extend(data["results"])
-
-        return results
-
-    async def extract_rich_text(rich_text_array):
-        content = ""
-        for item in rich_text_array:
-            text_content = item.get("text", {}).get("content", "")
-            annotations = item.get("annotations", {})
-
-            # Применяем форматирование
-            if annotations.get("bold"):
-                text_content = f"*{text_content}*"
-            if annotations.get("italic"):
-                text_content = f"_{text_content}_"
-            if annotations.get("underline"):
-                text_content = f"~{text_content}~"
-
-            content += text_content
-        return content
-
-    pages = await get_pages()
-    information = []
-
-    for page in pages:
-        props = page["properties"]
-        question = props.get("Вопрос", {}).get("title", [{}])[0].get("text", {}).get("content", "")
-        answer = props.get("Ответ", {}).get("rich_text", [])
-        formatted_answer = extract_rich_text(answer)
-        information.append([0, question, formatted_answer, 0])
-
-    async def minimum_changes(text, pattern):
-        n = len(text)
-        m = len(pattern)
-
-        # Создаем таблицу для хранения результатов
-        dp = [[0] * (m + 1) for _ in range(n + 1)]
-
-        # Заполняем первую строку и первый столбец
-        for i in range(n + 1):
-            dp[i][0] = i  # Количество удалений, чтобы превратить текст в пустую строку
-        for j in range(m + 1):
-            dp[0][j] = j  # Количество вставок, чтобы превратить пустую строку в паттерн
-
-        # Заполняем таблицу на основе динамического программирования
-        for i in range(1, n + 1):
-            for j in range(1, m + 1):
-                if text[i - 1] == pattern[j - 1]:
-                    dp[i][j] = dp[i - 1][j - 1]  # Символы совпадают, ничего не нужно менять
-                else:
-                    dp[i][j] = min(dp[i - 1][j] + 1,  # Удаление
-                                   dp[i][j - 1] + 1,  # Вставка
-                                   dp[i - 1][j - 1] + 1)  # Замена
-
-        return dp[n][m]  # Минимальное количество изменений
-
-    for i in range(0, len(information)):
-        changes_needed = minimum_changes(information[i][1], pattern)
-        information[i][0] = changes_needed
-    information.sort()
-
-    async def stem_word(word):
-        # Удаляет последние 2 символа, если длина слова больше 2
-        return word[:-2] if len(word) > 2 else word
-
-    async def get_matches(pattern, text):
-        # Преобразуем паттерн
-        pattern = pattern.lower()
-        # Удаляем окончания из слов в паттерне
-        pattern_words = set(stem_word(word) for word in re.findall(r'\b\w+\b', pattern))
-
-        # Преобразуем текст
-        text = text.lower()
-
-        text_words = set(stem_word(word) for word in re.findall(r'\b\w+\b', text))
-        matches = pattern_words.intersection(text_words)
-        match_count = len(matches)
-
-        return match_count
-
-    for i in range(0, len(information)):
-        information[i][3] = get_matches(pattern, information[i][1])
-
-    information.sort(reverse=True, key=lambda x: x[3])
-    put_answer([information[0][2], information[1][2], information[2][2]])
-    message_for_user = f"*Схожие вопросы: *" + "\n\n"
-    for i in range(0, 3):
-        message_for_user += f"*Вопрос №{i + 1}: *" + "\n" + f"_{information[i][1]}_" + '\n\n'
-    return message_for_user
-
+    return results
 
 async def get_chat_info(page_id):
-    token = "secret_N8zfGUMB144nM1TMojVYmSQtyMt2A5pu6RgyCmlcNL3"
-
-    # page_id = "ec48b9dacec340808876fbaf0947d4e6"
+    token = notion_token
     headers = {
         "Authorization": "Bearer " + token,
         "Content-Type": "application/json",
         "Notion-Version": "2022-06-28",
     }
-    DATABASE_ID = page_id
-
-    async def get_pages(num_pages=None):
-        url = f"https://api.notion.com/v1/databases/{DATABASE_ID}/query"
-        get_all = num_pages is None
-        page_size = 100 if get_all else num_pages
-        payload = {"page_size": page_size}
-        response = requests.post(url, json=payload, headers=headers)
-        data = response.json()
-        results = data["results"]
-
-        while data["has_more"] and get_all:
-            payload = {"page_size": page_size, "start_cursor": data["next_cursor"]}
-            url = f"https://api.notion.com/v1/databases/{DATABASE_ID}/query"
-            response = requests.post(url, json=payload, headers=headers)
-            data = response.json()
-            results.extend(data["results"])
-
-        return results
-
-    page = await get_pages()
+    page = await get_pages(page_id, headers)
     chat_info = []
     props = page[0]["properties"]
     Chat_name = props.get("Chat_name", {}).get("title", [{}])[0].get("text", {}).get("content", "")
@@ -187,38 +65,16 @@ async def get_chat_info(page_id):
     chat_info.append([Chat_name, workers, chat_id])
     get_chat_id(chat_info[0])
 
+# Функция получения списка вопросов по факультету
 
 async def get_questions(page_id):
-    token = "secret_N8zfGUMB144nM1TMojVYmSQtyMt2A5pu6RgyCmlcNL3"
-
-    # page_id = "ec48b9dacec340808876fbaf0947d4e6"
+    token = notion_token
     headers = {
         "Authorization": "Bearer " + token,
         "Content-Type": "application/json",
         "Notion-Version": "2022-06-28",
     }
-    DATABASE_ID = page_id
-
-    async def get_pages(num_pages=None):
-        url = f"https://api.notion.com/v1/databases/{DATABASE_ID}/query"
-        get_all = num_pages is None
-        page_size = 100 if get_all else num_pages
-        payload = {"page_size": page_size}
-        response = requests.post(url, json=payload, headers=headers)
-
-        data = response.json()
-        results = data["results"]
-
-        while data["has_more"] and get_all:
-            payload = {"page_size": page_size, "start_cursor": data["next_cursor"]}
-            url = f"https://api.notion.com/v1/databases/{DATABASE_ID}/query"
-            response = requests.post(url, json=payload, headers=headers)
-            data = response.json()
-            results.extend(data["results"])
-
-        return results
-
-    pages = await get_pages()
+    pages = await get_pages(page_id, headers)
     questions = []
     list_str_questions = f"*Список вопросов: *" + '\n\n'
     for page in pages:
@@ -231,7 +87,8 @@ async def get_questions(page_id):
     return list_str_questions
 
 
-# Classes of States
+# Классы States
+
 class MainStates(StatesGroup):
     start_state = State()
     problem_types = State()
@@ -262,7 +119,8 @@ class KKO_group(StatesGroup):
     status_answer = State()
 
 
-# KeyBoard
+# Клавиатуры
+
 def get_started():
     keyboard_list = [
         [InlineKeyboardButton(text="Начать работу", callback_data='Начать работу')]
@@ -270,18 +128,16 @@ def get_started():
     keyboard = InlineKeyboardMarkup(inline_keyboard=keyboard_list)
     return keyboard
 
-
 def get_faculty():
     keyboard_list = [
-        [InlineKeyboardButton(text='Факультет информатики, математики и компьютерных наук', callback_data='choice_1')],
-        [InlineKeyboardButton(text='Факультет гуманитарных наук', callback_data='choice_2')],
-        [InlineKeyboardButton(text='Факультет менеджмента', callback_data='choice_3')],
-        [InlineKeyboardButton(text='Факультет права', callback_data='choice_4')],
-        [InlineKeyboardButton(text='Факультет экономики', callback_data='choice_5')]
+        [InlineKeyboardButton(text='Факультет информатики, математики и компьютерных наук', callback_data='fac_it')],
+        [InlineKeyboardButton(text='Факультет гуманитарных наук', callback_data='fac_gum')],
+        [InlineKeyboardButton(text='Факультет менеджмента', callback_data='fac_man')],
+        [InlineKeyboardButton(text='Факультет права', callback_data='fac_law')],
+        [InlineKeyboardButton(text='Факультет экономики', callback_data='fac_econ')]
     ]
     keyboard = InlineKeyboardMarkup(inline_keyboard=keyboard_list)
     return keyboard
-
 
 def get_main_options_choice():
     keyboard_list = [
@@ -294,28 +150,15 @@ def get_main_options_choice():
     keyboard = InlineKeyboardMarkup(inline_keyboard=keyboard_list)
     return keyboard
 
-
 def get_outback_options():
     keyboard_list = [
         [InlineKeyboardButton(text='Назад', callback_data='back')],
         [InlineKeyboardButton(text='Задать еще вопрос', callback_data='ask_question')],
-        [InlineKeyboardButton(text='Я не получил нужного ответа', callback_data='support')]
+        [InlineKeyboardButton(text='Я не получил нужного ответа', callback_data='support')],
+        [InlineKeyboardButton(text='Задать вопрос в нейросеть', callback_data='question_to_ai')]
     ]
     keyboard = InlineKeyboardMarkup(inline_keyboard=keyboard_list)
     return keyboard
-
-
-def choice_needed_question():
-    keyboard_list = [
-        [InlineKeyboardButton(text="Ответ на вопрос №1", callback_data='answer_1')],
-        [InlineKeyboardButton(text="Ответ на вопрос №2", callback_data='answer_2')],
-        [InlineKeyboardButton(text="Ответ на вопрос №3", callback_data='answer_3')],
-        [InlineKeyboardButton(text="Список всех вопросов", callback_data='question_list')],
-        [InlineKeyboardButton(text="Переформулировать вопрос", callback_data='rephrase')]
-    ]
-    keyboard = InlineKeyboardMarkup(inline_keyboard=keyboard_list)
-    return keyboard
-
 
 def kko_options():
     keyboard_list = [
@@ -324,7 +167,6 @@ def kko_options():
     ]
     keyboard = InlineKeyboardMarkup(inline_keyboard=keyboard_list)
     return keyboard
-
 
 def kko_users_options():
     keyboard_list = [
@@ -335,7 +177,6 @@ def kko_users_options():
     keyboard = InlineKeyboardMarkup(inline_keyboard=keyboard_list)
     return keyboard
 
-
 def user_mark():
     keyboard_list = [
         [InlineKeyboardButton(text='Вопрос решен', callback_data='accepted')],
@@ -343,7 +184,6 @@ def user_mark():
     ]
     keyboard = InlineKeyboardMarkup(inline_keyboard=keyboard_list)
     return keyboard
-
 
 def check_answer():
     keyboard_list = [
@@ -355,7 +195,11 @@ def check_answer():
     return keyboard
 
 
-# Commands
+# Команды
+
+
+#Команда /start
+
 @user_router.message(Command("start"))
 async def start_process(message: Message, state: FSMContext):
     await state.clear()
@@ -369,6 +213,7 @@ async def start_process(message: Message, state: FSMContext):
         await state.update_data(message_edit = first_message)
     await state.set_state(MainStates.start_state)
 
+#Команда для ответа на запрос пользователя
 
 @user_router.message(Command("feedback_message"))
 async def start_process_feed(message: Message, state: FSMContext):
@@ -382,6 +227,8 @@ async def start_process_feed(message: Message, state: FSMContext):
                                                     parse_mode="Markdown")
             await state.update_data(last_message_id=feedback_message.message_id)
             await state.set_state(KKO_group.get_id)
+
+#Команда для отправки запроса в поддержку
 
 @user_router.message(Command("request_to_kko"))
 async def access_message(message: Message, state: FSMContext):
@@ -398,6 +245,7 @@ async def access_message(message: Message, state: FSMContext):
 
 
 # States
+
 @user_router.callback_query(F.data == 'Начать работу',MainStates.start_state)
 async def role_process(call: CallbackQuery, state: FSMContext):
     data = await state.get_data()
@@ -409,7 +257,9 @@ async def role_process(call: CallbackQuery, state: FSMContext):
     await state.update_data(last_message_id=faculty_question.message_id)
     await state.set_state(MainStates.problem_types)
 
-@user_router.callback_query(F.data == 'choice_1', MainStates.problem_types)
+#Сегмент работы с fac_it
+
+@user_router.callback_query(F.data == 'fac_it', MainStates.problem_types)
 async def role_process(call: CallbackQuery, state: FSMContext):
     data = await state.get_data()
     last_message_id = data.get("last_message_id")
@@ -419,69 +269,8 @@ async def role_process(call: CallbackQuery, state: FSMContext):
     main_choice = await call.message.answer(f"*Вы хотите задать вопрос *" + f"_связанный с выбранным факультетом _"
                                          + f"*или обратиться *" + f"_Комитет качества образования?_"
                               , reply_markup = get_main_options_choice(),parse_mode="Markdown")
-
     await state.update_data(last_message_id=main_choice.message_id)
     await state.set_state(Back_fac.back_fac_it)
-
-
-@user_router.callback_query(F.data == 'choice_2', MainStates.problem_types)
-async def role_process(call: CallbackQuery, state: FSMContext):
-    data = await state.get_data()
-    last_message_id = data.get("last_message_id")
-    if last_message_id:
-        await bot.delete_message(chat_id=call.from_user.id, message_id=last_message_id)  # Удаление последнего сообщения
-    await asyncio.sleep(0.5)
-    main_choice = await call.message.answer(f"*Вы хотите задать вопрос *" + f"_связанный с выбранным факультетом _"
-                                            + f"*или обратиться *" + f"_Комитет качества образования?_"
-                                            , reply_markup=get_main_options_choice(), parse_mode="Markdown")
-
-    await state.update_data(last_message_id=main_choice.message_id)
-    await state.set_state(Back_fac.back_fac_gum)
-
-
-@user_router.callback_query(F.data == 'choice_3', MainStates.problem_types)
-async def role_process(call: CallbackQuery, state: FSMContext):
-    data = await state.get_data()
-    last_message_id = data.get("last_message_id")
-    if last_message_id:
-        await bot.delete_message(chat_id=call.from_user.id, message_id=last_message_id)  # Удаление последнего сообщения
-    await asyncio.sleep(0.5)
-    main_choice = await call.message.answer(f"*Вы хотите задать вопрос *" + f"_связанный с выбранным факультетом _"
-                                            + f"*или обратиться *" + f"_Комитет качества образования?_"
-                                            , reply_markup=get_main_options_choice(), parse_mode="Markdown")
-
-    await state.update_data(last_message_id=main_choice.message_id)
-    await state.set_state(Back_fac.back_fac_man)
-
-
-@user_router.callback_query(F.data == 'choice_4', MainStates.problem_types)
-async def role_process(call: CallbackQuery, state: FSMContext):
-    data = await state.get_data()
-    last_message_id = data.get("last_message_id")
-    if last_message_id:
-        await bot.delete_message(chat_id=call.from_user.id, message_id=last_message_id)  # Удаление последнего сообщения
-    await asyncio.sleep(0.5)
-    main_choice = await call.message.answer(f"*Вы хотите задать вопрос *" + f"_связанный с выбранным факультетом _"
-                                            + f"*или обратиться *" + f"_Комитет качества образования?_"
-                                            , reply_markup=get_main_options_choice(), parse_mode="Markdown")
-
-    await state.update_data(last_message_id=main_choice.message_id)
-    await state.set_state(Back_fac.back_fac_law)
-
-
-@user_router.callback_query(F.data == 'choice_5', MainStates.problem_types)
-async def role_process(call: CallbackQuery, state: FSMContext):
-    data = await state.get_data()
-    last_message_id = data.get("last_message_id")
-    if last_message_id:
-        await bot.delete_message(chat_id=call.from_user.id, message_id=last_message_id)  # Удаление последнего сообщения
-    await asyncio.sleep(0.5)
-    main_choice = await call.message.answer(f"*Вы хотите задать вопрос *" + f"_связанный с выбранным факультетом _"
-                                            + f"*или обратиться *" + f"_Комитет качества образования?_"
-                                            , reply_markup=get_main_options_choice(), parse_mode="Markdown")
-
-    await state.update_data(last_message_id=main_choice.message_id)
-    await state.set_state(Back_fac.back_fac_econ)
 
 @user_router.callback_query(F.data == 'back', Back_fac.back_fac_it)
 async def back(call: CallbackQuery, state: FSMContext):
@@ -514,8 +303,7 @@ async def back(call: CallbackQuery, state: FSMContext):
     if last_message_id:
         await bot.delete_message(chat_id=call.from_user.id, message_id=last_message_id)  # Удаление последнего сообщения
     await asyncio.sleep(0.5)
-    page_id = "0030e2cc086b4a9880ab236eb8228aa0"
-    await get_chat_info(page_id)
+    await get_chat_info(support_page_id)
     support_message = await call.message.answer(f"*В данном отделе бота *" + f"_ты можешь отправить запрос в _" + f"*Комитет Качества Образования студсовета Вышки.*" + "\n\n" +
                                             f"*Это стоит делать*" + f"_ в случае конфликтной ситуации при учебном процессе, не типового вопроса, не соответствии коэффициентов накопа и экзамена ПУДУ и в т.п случаях._",
                                             reply_markup=kko_options(), parse_mode="Markdown")
@@ -575,6 +363,22 @@ async def back(call: CallbackQuery, state: FSMContext):
                                                  , reply_markup=get_main_options_choice(), parse_mode="Markdown")
     await state.update_data(last_message_id=question_list_message.message_id)
     await state.set_state(Back_fac.back_fac_it)
+
+#Сегмент работы с fac_gum
+
+@user_router.callback_query(F.data == 'fac_gum', MainStates.problem_types)
+async def role_process(call: CallbackQuery, state: FSMContext):
+    data = await state.get_data()
+    last_message_id = data.get("last_message_id")
+    if last_message_id:
+        await bot.delete_message(chat_id=call.from_user.id, message_id=last_message_id)  # Удаление последнего сообщения
+    await asyncio.sleep(0.5)
+    main_choice = await call.message.answer(f"*Вы хотите задать вопрос *" + f"_связанный с выбранным факультетом _"
+                                            + f"*или обратиться *" + f"_Комитет качества образования?_"
+                                            , reply_markup=get_main_options_choice(), parse_mode="Markdown")
+
+    await state.update_data(last_message_id=main_choice.message_id)
+    await state.set_state(Back_fac.back_fac_gum)
 
 @user_router.callback_query(F.data == 'back', Back_fac.back_fac_gum)
 async def back(call: CallbackQuery, state: FSMContext):
@@ -655,6 +459,22 @@ async def back(call: CallbackQuery, state: FSMContext):
     await state.update_data(last_message_id=question_list_message.message_id)
     await state.set_state(Back_fac.back_fac_gum)
 
+#Сегмент работы с fac_man
+
+@user_router.callback_query(F.data == 'fac_man', MainStates.problem_types)
+async def role_process(call: CallbackQuery, state: FSMContext):
+    data = await state.get_data()
+    last_message_id = data.get("last_message_id")
+    if last_message_id:
+        await bot.delete_message(chat_id=call.from_user.id, message_id=last_message_id)  # Удаление последнего сообщения
+    await asyncio.sleep(0.5)
+    main_choice = await call.message.answer(f"*Вы хотите задать вопрос *" + f"_связанный с выбранным факультетом _"
+                                            + f"*или обратиться *" + f"_Комитет качества образования?_"
+                                            , reply_markup=get_main_options_choice(), parse_mode="Markdown")
+
+    await state.update_data(last_message_id=main_choice.message_id)
+    await state.set_state(Back_fac.back_fac_man)
+
 @user_router.callback_query(F.data == 'back', Back_fac.back_fac_man)
 async def back(call: CallbackQuery, state: FSMContext):
     data = await state.get_data()
@@ -667,7 +487,7 @@ async def back(call: CallbackQuery, state: FSMContext):
     await state.update_data(last_message_id=back_message.message_id)
     await state.set_state(MainStates.problem_types)
 
-@user_router.callback_query(F.data == 'ask_question', Back_fac.back_fac_gum)
+@user_router.callback_query(F.data == 'ask_question', Back_fac.back_fac_man)
 async def back(call: CallbackQuery, state: FSMContext):
     data = await state.get_data()
     last_message_id = data.get("last_message_id")
@@ -733,6 +553,22 @@ async def back(call: CallbackQuery, state: FSMContext):
                                                  , reply_markup=get_main_options_choice(), parse_mode="Markdown")
     await state.update_data(last_message_id=question_list_message.message_id)
     await state.set_state(Back_fac.back_fac_man)
+
+#Сегмент работы с fac_law
+
+@user_router.callback_query(F.data == 'fac_law', MainStates.problem_types)
+async def role_process(call: CallbackQuery, state: FSMContext):
+    data = await state.get_data()
+    last_message_id = data.get("last_message_id")
+    if last_message_id:
+        await bot.delete_message(chat_id=call.from_user.id, message_id=last_message_id)  # Удаление последнего сообщения
+    await asyncio.sleep(0.5)
+    main_choice = await call.message.answer(f"*Вы хотите задать вопрос *" + f"_связанный с выбранным факультетом _"
+                                            + f"*или обратиться *" + f"_Комитет качества образования?_"
+                                            , reply_markup=get_main_options_choice(), parse_mode="Markdown")
+
+    await state.update_data(last_message_id=main_choice.message_id)
+    await state.set_state(Back_fac.back_fac_law)
 
 @user_router.callback_query(F.data == 'back', Back_fac.back_fac_law)
 async def back(call: CallbackQuery, state: FSMContext):
@@ -812,6 +648,22 @@ async def back(call: CallbackQuery, state: FSMContext):
                                                  , reply_markup=get_main_options_choice(), parse_mode="Markdown")
     await state.update_data(last_message_id=question_list_message.message_id)
     await state.set_state(Back_fac.back_fac_law)
+
+#Сегмент работы с fac_econ
+
+@user_router.callback_query(F.data == 'fac_econ', MainStates.problem_types)
+async def role_process(call: CallbackQuery, state: FSMContext):
+    data = await state.get_data()
+    last_message_id = data.get("last_message_id")
+    if last_message_id:
+        await bot.delete_message(chat_id=call.from_user.id, message_id=last_message_id)  # Удаление последнего сообщения
+    await asyncio.sleep(0.5)
+    main_choice = await call.message.answer(f"*Вы хотите задать вопрос *" + f"_связанный с выбранным факультетом _"
+                                            + f"*или обратиться *" + f"_Комитет качества образования?_"
+                                            , reply_markup=get_main_options_choice(), parse_mode="Markdown")
+
+    await state.update_data(last_message_id=main_choice.message_id)
+    await state.set_state(Back_fac.back_fac_econ)
 
 @user_router.callback_query(F.data == 'back', Back_fac.back_fac_econ)
 async def back(call: CallbackQuery, state: FSMContext):
@@ -895,8 +747,11 @@ async def back(call: CallbackQuery, state: FSMContext):
 @user_router.message(F.text, Faculties_types.fac_it)
 async def answer_options(message: Message, state: FSMContext):
     async with ChatActionSender.typing(bot=bot, chat_id=message.chat.id):
-        page_id_fac = 'ec48b9dacec340808876fbaf0947d4e6'
-        answer_bot_message = await message.answer(f"{await get_answer(message.text, page_id_fac)}",
+        await asyncio.sleep(0.5)
+        ai_thinking_message = await message.answer(f"_Поиск ответа в базе данных_", parse_mode="Markdown")
+        info_for_answer = await search(message.text, "fac_it")
+        await ai_thinking_message.delete()
+        answer_bot_message = await message.answer(f"Найденная информация: \n\n" + info_for_answer[3],
                                           reply_markup=choice_needed_question(), parse_mode="Markdown")
         await state.update_data(last_message_id=answer_bot_message.message_id)
         await state.set_state(Back_fac.back_fac_it)
@@ -936,6 +791,8 @@ async def answer_options(message: Message, state: FSMContext):
                                           reply_markup=choice_needed_question(), parse_mode="Markdown")
         await state.update_data(last_message_id=answer_bot_message.message_id)
         await state.set_state(Back_fac.back_fac_econ)
+
+# Раздел работы поддержки
 
 @user_router.message(F.text, KKO_group.get_id)
 async def get_id(message: Message, state: FSMContext):
@@ -1125,4 +982,3 @@ async def main():
 
 if __name__ == "__main__":
     asyncio.run(main())
-    #load_embeddings()

@@ -8,20 +8,20 @@ import numpy as np
 from transformers import AutoTokenizer, AutoModel
 from torch.nn.functional import cosine_similarity
 from tokens_file import notion_token
+from pathlib import Path
 
 
 
 TOKEN = notion_token
-PAGE_ID = "ec48b9dacec340808876fbaf0947d4e6"
 HEADERS = {
     "Authorization": "Bearer " + TOKEN,
     "Content-Type": "application/json",
     "Notion-Version": "2022-06-28",
 }
-DATABASE_ID = PAGE_ID
 MODEL_NAME= "intfloat/multilingual-e5-large"
-async def get_pages(num_pages=None):
-    url = f"https://api.notion.com/v1/databases/{DATABASE_ID}/query"
+
+async def get_pages(page_id, num_pages=None):
+    url = f"https://api.notion.com/v1/databases/{page_id}/query"
     get_all = num_pages is None
     page_size = 100 if get_all else num_pages
     payload = {"page_size": page_size}
@@ -51,8 +51,8 @@ async def extract_rich_text(rich_text_array):
         content += text_content
     return content
 
-async def parse_questions():
-    pages = await get_pages()
+async def parse_questions(page_id):
+    pages = await get_pages(page_id)
     information = []
     for page in pages:
         props = page["properties"]
@@ -71,28 +71,29 @@ async def get_embeddings(texts):
         outputs = model(**inputs)
     return outputs.last_hidden_state[:, 0, :]  # Берем CLS-токен
 
-async def load_embeddings():
-    information = await parse_questions()
-    data = await load_data("../../../../Downloads/Telegram Desktop/emb_info.json")
+async def load_embeddings(faculty_name):
+    file_path = f"{Path(__file__).parent.parent}" + "/embeddings"
+    data = await load_data(f"{file_path}/emb_info.json")
     print(data)
-    if data["fac_it"] != len(information):
+    information = await parse_questions(data[faculty_name]["page_id"])
+    if data[faculty_name]["question_count"] != len(information):
         questions = [cell[1] for cell in information]
         questions_embeddings = await get_embeddings(questions)
-        data["fac_it"] = len(information)
-        np.save("embeddings.npy", questions_embeddings)
-        await save_data("../../../../Downloads/Telegram Desktop/emb_info.json", data)
-    elif os.path.exists("embeddings.npy"):
-        questions_embeddings = np.load("embeddings.npy")
+        data[faculty_name]["question_count"] = len(information)
+        np.save(f"{file_path}/emb_{faculty_name}.npy", questions_embeddings)
+        await save_data(f"{file_path}/emb_info.json", data)
+    elif os.path.exists(f"{file_path}/emb_{faculty_name}.npy"):
+        questions_embeddings = np.load(f"{file_path}/emb_{faculty_name}.npy")
     else:
         questions = [cell[1] for cell in information]
         questions_embeddings = await get_embeddings(questions)
-        np.save("embeddings.npy", questions_embeddings)
+        np.save(f"{file_path}/emb_{faculty_name}.npy", questions_embeddings)
     for i, emb in enumerate(questions_embeddings):
         information[i][0] = emb
-    global pre_work_info
-    pre_work_info = information
+    return information
 
-async def search(user_question):
+async def search(user_question, faculty_name):
+    pre_work_info = await load_embeddings(faculty_name)
     user_question_emb = await get_embeddings(user_question)
     database_questions_embed = torch.stack([torch.as_tensor(cell[0]) for cell in pre_work_info])
     similarities = cosine_similarity(
@@ -106,7 +107,8 @@ async def search(user_question):
 
     best_match = pre_work_info[best_match_idx][1]
     best_score = similarities.flatten()[best_match_idx].item()  # Исправлено для корректного доступа
-    print("answer: "  + str(user_question) + " " + str(best_score) + " " + str(best_match))
+    print("answer: " + str(user_question) + " " + str(best_score) + " " + str(best_match))
+    return [user_question, best_score, best_match, pre_work_info[best_match_idx][2]]
 
 #Загрузка данных из файла
 
@@ -124,5 +126,4 @@ async def save_data(data_file, data):
         json.dump(data, file, ensure_ascii=False, indent=4)
 
 if __name__ == "__main__":
-    asyncio.run(load_embeddings())
-    asyncio.run(search("Smart lms"))
+    asyncio.run(search("Smart lms", "fac_law"))

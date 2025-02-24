@@ -100,3 +100,4 @@ async def send_schedule():
             print('Ошибка при чтении файла:', e)
     else:
         print('Файл не найден после загрузки.')
+
