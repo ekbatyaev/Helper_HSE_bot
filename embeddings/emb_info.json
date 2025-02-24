@@ -1,0 +1,22 @@
+{
+    "fac_it": {
+        "question_count": 45,
+        "page_id": "ec48b9dacec340808876fbaf0947d4e6"
+    },
+    "fac_gum": {
+        "question_count": 46,
+        "page_id": "6c8ce3dbf4ac4394a64fa12b4b4a30ca"
+    },
+    "fac_econ": {
+        "question_count": 45,
+        "page_id": "e0733dd88ae5408c8d8b09c36de0097c"
+    },
+    "fac_law": {
+        "question_count": 45,
+        "page_id": "b86417ae42c1423e8861ff59fa6d8e8a"
+    },
+    "fac_man": {
+        "question_count": 46,
+        "page_id": "596c82e5961c46d1b34a11586eeb1cf8"
+    }
+}
