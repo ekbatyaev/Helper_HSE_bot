@@ -523,13 +523,6 @@ def get_chat_id(storage_chat):
     global chat_information
     chat_information = storage_chat
 
-# Messages id
-messages_id = {}
-
-def put_last_message_id(user_id, message_id):
-    global messages_id
-    messages_id[user_id] = message_id
-
 # Запуск процесса поллинга новых апдейтов
 async def main():
     await dp.start_polling(bot)
