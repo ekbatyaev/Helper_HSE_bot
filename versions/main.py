@@ -1,3 +1,4 @@
+import math
 import logging
 import asyncio
 import requests
@@ -22,11 +23,15 @@ logging.basicConfig(level=logging.INFO)
 
 # Объект бота
 bot = Bot(token=telegram_bot_token)
+
 # Диспетчер
 dp = Dispatcher(storage=MemoryStorage())
 
 # Регистрация маршрутизатора
 dp.include_router(user_router)
+
+#Загрузка страницы общих вопросов
+common_questions_page_id = asyncio.run(load_data(f"{Path(__file__).parent.parent}" + "/embeddings/emb_info.json")).get("common_questions").get("page_id")
 
 #Глобальные функции для получения внешних данных
 
@@ -66,25 +71,25 @@ async def get_chat_info(page_id):
     chat_info.append([Chat_name, workers, chat_id])
     get_chat_id(chat_info[0])
 
-# Функция получения списка вопросов по факультету
+# Функция получения списка вопросов
 
-async def get_questions(page_id):
+async def get_questions(fac_page_id):
     token = notion_token
     headers = {
         "Authorization": "Bearer " + token,
         "Content-Type": "application/json",
         "Notion-Version": "2022-06-28",
     }
-    pages = await get_pages(page_id, headers)
-    questions = []
-    list_str_questions = f"*Список вопросов: *" + '\n\n'
-    for page in pages:
-        page_id = page["id"]
-        props = page["properties"]
-        question = props.get("Вопрос", {}).get("title", [{}])[0].get("text", {}).get("content", "")
-        questions.append(question)
-    for i in range(len(questions)):
-        list_str_questions += f"*{i + 1}) *" + f"_{questions[len(questions) - i - 1]}_" + "\n"
+    index = 1
+    list_str_questions = []
+    for page_id in [common_questions_page_id, fac_page_id]:
+        pages = await get_pages(page_id, headers)
+        for i, page in enumerate(pages):
+            props = page["properties"]
+            question = "".join(
+                [part.get("text", {}).get("content", "") for part in props.get("Вопрос", {}).get("title", [])])
+            list_str_questions.append(f"*{index + i}) *" + f"_{question}_")
+        index+=len(pages)
     return list_str_questions
 
 
@@ -113,39 +118,38 @@ class Support(StatesGroup):
 
 def get_started():
     keyboard_list = [
-        [InlineKeyboardButton(text="Начать работу", callback_data='Начать работу')]
+        [InlineKeyboardButton(text="Начать работу 🚀", callback_data='Начать работу')]
     ]
     keyboard = InlineKeyboardMarkup(inline_keyboard=keyboard_list)
     return keyboard
 
 def get_faculty():
     keyboard_list = [
-        [InlineKeyboardButton(text='Факультет информатики, математики и компьютерных наук', callback_data='fac_it')],
-        [InlineKeyboardButton(text='Факультет гуманитарных наук', callback_data='fac_gum')],
-        [InlineKeyboardButton(text='Факультет менеджмента', callback_data='fac_man')],
-        [InlineKeyboardButton(text='Факультет права', callback_data='fac_law')],
-        [InlineKeyboardButton(text='Факультет экономики', callback_data='fac_econ')]
+        [InlineKeyboardButton(text='Факультет информатики, математики и компьютерных наук 💻', callback_data='fac_it')],
+        [InlineKeyboardButton(text='Факультет гуманитарных наук 📚', callback_data='fac_gum')],
+        [InlineKeyboardButton(text='Факультет менеджмента 📊', callback_data='fac_man')],
+        [InlineKeyboardButton(text='Факультет права ⚖️', callback_data='fac_law')],
+        [InlineKeyboardButton(text='Факультет экономики 💼', callback_data='fac_econ')]
     ]
     keyboard = InlineKeyboardMarkup(inline_keyboard=keyboard_list)
     return keyboard
 
 def get_main_options_choice():
     keyboard_list = [
-        [InlineKeyboardButton(text='Задать вопрос', callback_data='ask_question')],
-        [InlineKeyboardButton(text='Список вопросов', callback_data='question_list')],
-        [InlineKeyboardButton(text='Узнать расписание', callback_data='get_schedule')],
-        [InlineKeyboardButton(text='Обратиться в службу поддержки', callback_data='support')],
-        [InlineKeyboardButton(text='Назад', callback_data='back')]
+        [InlineKeyboardButton(text='Задать вопрос ❓', callback_data='ask_question')],
+        [InlineKeyboardButton(text='Список вопросов 📜', callback_data='question_list')],
+        [InlineKeyboardButton(text='Узнать расписание 🗓 ', callback_data='get_schedule')],
+        [InlineKeyboardButton(text='Обратиться в службу поддержки 💬', callback_data='support')],
+        [InlineKeyboardButton(text='Назад 🏠', callback_data='back')]
     ]
     keyboard = InlineKeyboardMarkup(inline_keyboard=keyboard_list)
     return keyboard
 
 def get_outback_options():
     keyboard_list = [
-        [InlineKeyboardButton(text='Назад', callback_data='back')],
-        [InlineKeyboardButton(text='Задать еще вопрос', callback_data='ask_question')],
-        [InlineKeyboardButton(text='Я не получил нужного ответа', callback_data='support')],
-        [InlineKeyboardButton(text='Задать вопрос в нейросеть', callback_data='question_to_ai')]
+        [InlineKeyboardButton(text='Назад 🏠', callback_data='back')],
+        [InlineKeyboardButton(text='Задать еще вопрос ❓', callback_data='ask_question')],
+        [InlineKeyboardButton(text='Я не получил нужного ответа ❌', callback_data='support')]
     ]
     keyboard = InlineKeyboardMarkup(inline_keyboard=keyboard_list)
     return keyboard
@@ -154,34 +158,34 @@ def get_outback_options():
 
 def support_options():
     keyboard_list = [
-        [InlineKeyboardButton(text='Написать запрос', callback_data='write_request')],
-        [InlineKeyboardButton(text='Назад', callback_data='back')]
+        [InlineKeyboardButton(text='Написать запрос ✍️', callback_data='write_request')],
+        [InlineKeyboardButton(text='Назад 🏠', callback_data='back')]
     ]
     keyboard = InlineKeyboardMarkup(inline_keyboard=keyboard_list)
     return keyboard
 
 def support_users_options():
     keyboard_list = [
-        [InlineKeyboardButton(text='Отправить запрос', callback_data='send_request')],
-        [InlineKeyboardButton(text='Перезаписать вопрос', callback_data='write_request')],
-        [InlineKeyboardButton(text='Назад', callback_data='back')]
+        [InlineKeyboardButton(text='Отправить запрос 📤', callback_data='send_request')],
+        [InlineKeyboardButton(text='Перезаписать вопрос ✍️', callback_data='write_request')],
+        [InlineKeyboardButton(text='Назад 🏠', callback_data='back')]
     ]
     keyboard = InlineKeyboardMarkup(inline_keyboard=keyboard_list)
     return keyboard
 
 def user_mark():
     keyboard_list = [
-        [InlineKeyboardButton(text='Вопрос решен', callback_data='accepted')],
-        [InlineKeyboardButton(text='Я не получил нужного ответа', callback_data='not_accepted')]
+        [InlineKeyboardButton(text='Вопрос решен ✅', callback_data='accepted')],
+        [InlineKeyboardButton(text='Я не получил нужного ответа ❌', callback_data='not_accepted')]
     ]
     keyboard = InlineKeyboardMarkup(inline_keyboard=keyboard_list)
     return keyboard
 
 def check_answer():
     keyboard_list = [
-        [InlineKeyboardButton(text='Отправить ответ', callback_data='send_answer')],
-        [InlineKeyboardButton(text='Перезаписать ответ', callback_data='write_again')],
-        [InlineKeyboardButton(text='Назад', callback_data='back')]
+        [InlineKeyboardButton(text='Отправить ответ 📤', callback_data='send_answer')],
+        [InlineKeyboardButton(text='Перезаписать ответ ✍️', callback_data='write_again')],
+        [InlineKeyboardButton(text='Назад 🏠', callback_data='back')]
     ]
     keyboard = InlineKeyboardMarkup(inline_keyboard=keyboard_list)
     return keyboard
@@ -301,19 +305,6 @@ async def answer_options(message: Message, state: FSMContext):
         await state.update_data(last_message_id=answer_bot_message.message_id)
         await state.set_state(Faculties.request_allocation)
 
-@user_router.callback_query(F.data == 'question_to_ai', Faculties.request_allocation)
-async def back(call: CallbackQuery, state: FSMContext):
-    data = await state.get_data()
-    last_message_id = data.get("last_message_id")
-    if last_message_id:
-        await bot.delete_message(chat_id=call.from_user.id, message_id=last_message_id)  # Удаление последнего сообщения
-    await asyncio.sleep(0.5)
-    await call.message.answer(f"_В разработке_", parse_mode="Markdown" )
-    main_choice = await call.message.answer(f"*Вы хотите задать вопрос *" + f"связанный с выбранным факультетом "
-                                            + f"*или обратиться *" + f"службу поддержки?"
-                                            , reply_markup=get_main_options_choice(), parse_mode="Markdown")
-    await state.update_data(last_message_id = main_choice.message_id)
-    await state.set_state(Faculties.request_allocation)
 
 @user_router.callback_query(F.data == 'support', Faculties.request_allocation)
 async def back(call: CallbackQuery, state: FSMContext):
@@ -353,7 +344,13 @@ async def back(call: CallbackQuery, state: FSMContext):
     await asyncio.sleep(0.5)
     file_path = f"{Path(__file__).parent.parent}" + "/embeddings"
     info_fac = await load_data(f"{file_path}/emb_info.json")
-    await call.message.answer(f"{await get_questions(info_fac[faculty_name]["page_id"])}", parse_mode="Markdown")
+    list_of_questions = await get_questions(info_fac[faculty_name]["page_id"])
+    for i in range(math.ceil(len(list_of_questions) / 50)):
+        start_index = i * 50
+        end_index = start_index + 50
+        question_chunk = list_of_questions[start_index:end_index]
+        question_string = '\n'.join(question_chunk)
+        await call.message.answer(f"{question_string}", parse_mode="Markdown")
     question_list_message = await call.message.answer(f"*Вы хотите задать вопрос *" + f"связанный с выбранным факультетом "
                                                  + f"*или обратиться *" + f"службу поддержки?"
                                                  , reply_markup=get_main_options_choice(), parse_mode="Markdown")

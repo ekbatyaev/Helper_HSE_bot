@@ -11,7 +11,6 @@ from tokens_file import notion_token
 from pathlib import Path
 
 
-
 TOKEN = notion_token
 HEADERS = {
     "Authorization": "Bearer " + TOKEN,
@@ -51,16 +50,19 @@ async def extract_rich_text(rich_text_array):
         content += text_content
     return content
 
-async def parse_questions(page_id):
-    pages = await get_pages(page_id)
+async def parse_questions(fac_page_id):
     information = []
-    for page in pages:
-        props = page["properties"]
-        question = props.get("Вопрос", {}).get("title", [{}])[0].get("text", {}).get("content", "")
-        answer = props.get("Ответ", {}).get("rich_text", [])
-        formatted_answer = await extract_rich_text(answer)
-        information.append([0, question, formatted_answer])
-    return information
+    all_len = 0
+    for page_id in [common_questions_page_id, fac_page_id]:
+        pages = await get_pages(page_id)
+        for page in pages:
+            props = page["properties"]
+            question = "".join([part.get("text", {}).get("content", "") for part in props.get("Вопрос", {}).get("title", [])])
+            answer = props.get("Ответ", {}).get("rich_text", [])
+            formatted_answer = await extract_rich_text(answer)
+            all_len+=len(question) + len(formatted_answer)
+            information.append([0, question, formatted_answer])
+    return [information, all_len]
 
 
 async def get_embeddings(texts):
@@ -74,12 +76,11 @@ async def get_embeddings(texts):
 async def load_embeddings(faculty_name):
     file_path = f"{Path(__file__).parent.parent}" + "/embeddings"
     data = await load_data(f"{file_path}/emb_info.json")
-    print(data)
-    information = await parse_questions(data[faculty_name]["page_id"])
-    if data[faculty_name]["question_count"] != len(information):
+    information, symbols_count = await parse_questions(data[faculty_name]["page_id"])
+    if data[faculty_name]["symbols_count"] != symbols_count:
         questions = [cell[1] for cell in information]
         questions_embeddings = await get_embeddings(questions)
-        data[faculty_name]["question_count"] = len(information)
+        data[faculty_name]["symbols_count"] = symbols_count
         np.save(f"{file_path}/emb_{faculty_name}.npy", questions_embeddings)
         await save_data(f"{file_path}/emb_info.json", data)
     elif os.path.exists(f"{file_path}/emb_{faculty_name}.npy"):
@@ -119,11 +120,16 @@ async def load_data(data_file):
     except FileNotFoundError:
         return []  # Если файл не существует, возвращаем пустой список
 
+#Загрузка страницы общих вопросов
+common_questions_page_id = asyncio.run(load_data(f"{Path(__file__).parent.parent}" + "/embeddings/emb_info.json")).get("common_questions").get("page_id")
+
 #Сохранение данных
 
 async def save_data(data_file, data):
     with open(data_file, 'w', encoding='utf-8') as file:
         json.dump(data, file, ensure_ascii=False, indent=4)
 
+
 if __name__ == "__main__":
-    asyncio.run(search("Smart lms", "fac_law"))
+    asyncio.run(search("Bookinema", "fac_it"))
+
