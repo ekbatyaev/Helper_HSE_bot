@@ -93,26 +93,64 @@ async def load_embeddings(faculty_name):
         information[i][0] = emb
     return information
 
+
 async def search(user_question, faculty_name):
+    # Загрузка предварительно обработанных данных
     pre_work_info = await load_embeddings(faculty_name)
+
+    # Получаем эмбеддинг вопроса пользователя
     user_question_emb = await get_embeddings(user_question)
+
+    # Подготавливаем эмбеддинги вопросов из базы данных
     database_questions_embed = torch.stack([torch.as_tensor(cell[0]) for cell in pre_work_info])
+
+    # Вычисляем сходство между вопросом пользователя и вопросами из базы
     similarities = cosine_similarity(
         user_question_emb.unsqueeze(1), database_questions_embed.unsqueeze(0), dim=-1
     )
+
     if similarities.numel() == 0:
         raise ValueError("Ошибка: similarities пустой!")
+
     best_match_idx = similarities.argmax().item()  # Индекс наибольшего сходства
     if best_match_idx >= len(pre_work_info):
         raise IndexError(f"Ошибка: best_match_idx ({best_match_idx}) выходит за границы {len(pre_work_info)}")
 
     best_match = pre_work_info[best_match_idx][1]
-    best_score = similarities.flatten()[best_match_idx].item()  # Исправлено для корректного доступа
-    print("answer: " + str(user_question) + " " + str(best_score) + " " + str(best_match))
-    if best_score < 0.85:
+    best_score = similarities.flatten()[best_match_idx].item()
+    context = pre_work_info[best_match_idx][2]
+
+    print(f"answer: {user_question} {best_score} {best_match}")
+
+    # Разбиваем контекст на части, если он слишком большой
+    max_context_length = 512  # Максимальная длина контекста для сравнения
+    context_parts = [context[i:i + max_context_length] for i in range(0, len(context), max_context_length)]
+
+    # Получаем эмбеддинги для каждой части контекста
+    context_embs = []
+    for part in context_parts:
+        emb = await get_embeddings(part)
+        context_embs.append(emb)
+
+    # Вычисляем сходство с каждой частью контекста
+    max_context_similarity = 0
+    for emb in context_embs:
+        similarities_context = cosine_similarity(
+            user_question_emb.unsqueeze(1), emb.unsqueeze(0), dim=-1
+        )
+        current_sim = similarities_context.item()
+        if current_sim > max_context_similarity:
+            max_context_similarity = current_sim
+
+    print(f"Max context similarity: {max_context_similarity}")
+
+    # Проверяем оба условия: сходство с вопросом и с контекстом
+    if best_score < 0.85 or (best_score < 0.9 and max_context_similarity < 0.85):
+        print("Неправильно")
         answer = "Я не смог найти ответ на твой вопрос 🙁"
         return [user_question, best_score, best_match, answer]
-    return [user_question, best_score, best_match, pre_work_info[best_match_idx][2]]
+
+    return [user_question, best_score, best_match, context]
 
 #Загрузка данных из файла
 
@@ -134,5 +172,5 @@ async def save_data(data_file, data):
 
 
 if __name__ == "__main__":
-    asyncio.run(search("Что такое маголего?", "fac_it"))
+    asyncio.run(search("Как получить справку об обучении?", "fac_it"))
 

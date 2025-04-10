@@ -261,17 +261,40 @@ async def search_api(request: SearchRequest, token: str = Depends(verify_token))
 
         best_match = pre_work_info[best_match_idx][1]
         best_score = similarities.flatten()[best_match_idx].item()
+        context = pre_work_info[best_match_idx][2]
 
-        logger.info(f"Best match found with score: {best_score:.2f}")
+        print(f"answer: {request.question} {best_score} {best_match}")
 
-        if best_score < 0.85:
+        # Разбиваем контекст на части, если он слишком большой
+        max_context_length = 512  # Максимальная длина контекста для сравнения
+        context_parts = [context[i:i + max_context_length] for i in range(0, len(context), max_context_length)]
+
+        # Получаем эмбеддинги для каждой части контекста
+        context_embs = []
+        for part in context_parts:
+            emb = await get_embeddings(part)
+            context_embs.append(emb)
+
+        # Вычисляем сходство с каждой частью контекста
+        max_context_similarity = 0
+        for emb in context_embs:
+            similarities_context = cosine_similarity(
+                user_question_emb.unsqueeze(1), emb.unsqueeze(0), dim=-1
+            )
+            current_sim = similarities_context.item()
+            if current_sim > max_context_similarity:
+                max_context_similarity = current_sim
+
+        print(f"Max context similarity: {max_context_similarity}")
+
+        # Проверяем оба условия: сходство с вопросом и с контекстом
+        if best_score < 0.85 or (best_score < 0.89 and max_context_similarity < 0.85):
             return {
                 "question": request.question,
                 "score": best_score,
                 "best_match": best_match,
                 "answer": "Я не смог найти точный ответ на твой вопрос 🙁"
             }
-
         return {
             "question": request.question,
             "score": best_score,
