@@ -1,0 +1,27 @@
+version: '3.8'
+
+services:
+  bot:
+    build: bot
+    environment:
+      - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN}
+      - MODEL_API_URL=http://model:8000/search
+      - NOTION_TOKEN=${NOTION_TOKEN}
+      - SUPPORT_PAGE_ID=${SUPPORT_PAGE_ID}
+      - API_TOKEN=${API_TOKEN}
+    volumes:
+      - ./model/embeddings/emb_info.json:/app/emb_info.json
+    depends_on:
+      - model
+    restart: unless-stopped
+
+  model:
+    build: model
+    environment:
+      - NOTION_TOKEN=${NOTION_TOKEN}
+      - API_TOKEN=${API_TOKEN}
+    volumes:
+      - ./model/embeddings:/app/embeddings
+    ports:
+      - "8000:8000"
+    restart: unless-stopped

@@ -3,3 +3,4 @@
 tokens_file.py
 .idea
 .__pycache__
+versions/docker_project_version/.env
