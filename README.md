@@ -22,13 +22,15 @@
 
    Создайте файл .env в versions/docker_project_version и добавьте следующие переменные:
 
-   TELEGRAM_TOKEN=ваш_токен_бота
-   NOTION_TOKEN=ваш_токен_базы_данных_notion
-   API_TOKEN=ваш_токен_для_отправки_запросов_в_модель
-   HF_TOKEN=токен_для_работы_с_моделями
-   SUPPORT_PAGE_ID=id_страницы_с_данными_поддержки (id чата, теги сотрудников)
+   - TELEGRAM_TOKEN=ваш_токен_бота (создаётся в диалоге с [@BotFather](https://t.me/BotFather))
    
-   Замените ваш_токен_бота на токен вашего Telegram-бота, полученный у [@BotFather](https://t.me/BotFather). NOTION_TOKEN создаётся в разделе [Notion API](https://developers.notion.com/). API_TOKEN необходим для отправки запросов в модель нужна в целях безопасности и создаётся пользователем. HF_TOKEN создаётся на официальном сайте [Hugging Face](https://huggingface.co/))
+   - NOTION_TOKEN=ваш_токен_базы_данных_notion (создаётся в разделе [Notion API](https://developers.notion.com/))
+   
+   - API_TOKEN=ваш_токен_для_отправки_запросов_в_модель (необходим для отправки запросов в модель нужна в целях безопасности и создаётся пользователем)
+   
+   - HF_TOKEN=токен_для_работы_с_моделями (создаётся на официальном сайте [Hugging Face](https://huggingface.co/))
+   
+   - SUPPORT_PAGE_ID=id_страницы_с_данными_поддержки (id чата, теги сотрудников)
 
 4. Запуск проекта (в директории docker_project_version) выполните команду:
 
