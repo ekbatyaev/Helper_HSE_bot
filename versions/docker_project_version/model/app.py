@@ -6,6 +6,7 @@ import numpy as np
 from pathlib import Path
 from contextlib import asynccontextmanager
 from fastapi import FastAPI, HTTPException, Depends
+from huggingface_hub import login
 from pydantic import BaseModel
 from transformers import AutoTokenizer, AutoModel
 from torch.nn.functional import cosine_similarity
@@ -21,6 +22,7 @@ logger = logging.getLogger(__name__)
 MODEL_NAME = "intfloat/multilingual-e5-large"
 API_TOKEN = os.getenv("API_TOKEN")
 NOTION_TOKEN = os.getenv("NOTION_TOKEN")
+HF_TOKEN = os.getenv("HF_TOKEN")
 
 # Глобальные переменные для модели и токенизатора
 tokenizer = None
@@ -31,7 +33,12 @@ model = None
 async def lifespan(app: FastAPI):
     """Управление жизненным циклом приложения"""
     global tokenizer, model
-
+    if HF_TOKEN:
+        try:
+            login(token=HF_TOKEN)
+            logger.info("Logged in to Hugging Face")
+        except Exception as e:
+            logger.warning(f"Failed to log in to Hugging Face: {e}")
     # Загрузка модели при старте
     logger.info("Loading tokenizer and model...")
     try:
@@ -288,19 +295,28 @@ async def search_api(request: SearchRequest, token: str = Depends(verify_token))
         print(f"Max context similarity: {max_context_similarity}")
 
         # Проверяем оба условия: сходство с вопросом и с контекстом
-        if best_score < 0.85 or (best_score < 0.89 and max_context_similarity < 0.85):
+        if best_score > 0.9 or (best_score < 0.85 < max_context_similarity):
+            return {
+                "question": request.question,
+                "score": best_score,
+                "best_match": best_match,
+                "answer": pre_work_info[best_match_idx][2],
+            }
+        elif (0.9 > best_score > 0.85) and max_context_similarity > 0.8:
+            return {
+                "question": request.question,
+                "score": best_score,
+                "best_match": best_match,
+                "answer": pre_work_info[best_match_idx][2],
+                "code": 1
+            }
+        else:
             return {
                 "question": request.question,
                 "score": best_score,
                 "best_match": best_match,
                 "answer": "Я не смог найти точный ответ на твой вопрос 🙁"
             }
-        return {
-            "question": request.question,
-            "score": best_score,
-            "best_match": best_match,
-            "answer": pre_work_info[best_match_idx][2]
-        }
 
     except HTTPException:
         raise

@@ -26,12 +26,13 @@
    NOTION_TOKEN=ваш_токен_базы_данных_notion
    API_TOKEN=ваш_токен_для_отправки_запросов_в_модель
    SUPPORT_PAGE_ID=id_страницы_с_данными_поддержки (id чата, теги сотрудников)
+   HF_TOKEN=токен_для_работы_с_моделями (создаётся на официальном сайте [Hugging Face](https://huggingface.co/))
    
    Замените ваш_токен_бота на токен вашего Telegram-бота, полученный у [@BotFather](https://t.me/BotFather). Токен базы данных Notion создаётся в разделе Notion API. Токен для отправки запросов в модель создаётся самостоятельно в целях безопасности.
 
 3. Запуск проекта (в директории docker_project_version) выполните команду:
 
-   docker compose up
+   docker-compose up
 
    Если у вас не установлен Docker, то  установите его с [официального сайта](https://www.docker.com/products/docker-desktop/).
 

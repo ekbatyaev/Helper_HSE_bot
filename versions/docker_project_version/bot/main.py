@@ -20,7 +20,6 @@ from aiogram.fsm.storage.memory import MemoryStorage
 telegram_bot_token = os.getenv("TELEGRAM_BOT_TOKEN")
 notion_token = os.getenv("NOTION_TOKEN")
 support_page_id = os.getenv("SUPPORT_PAGE_ID")
-#common_questions_page_id = os.getenv("COMMON_QUESTION_PAGE_ID")
 
 # Обработчик следования пользователя
 user_router = Router()
@@ -133,7 +132,7 @@ async def search(user_question: str, faculty_name: str) -> Dict[str, Any]:
             async with session.post(
                     f"{model_url}?token={api_token}",
                     json=payload,
-                    timeout=10
+                    timeout=20
             ) as response:
 
                 if response.status == 200:
@@ -179,7 +178,6 @@ class Faculties(StatesGroup):
 class Support(StatesGroup):
     get_id = State()
     back_request = State()
-    feedback_answer = State()
     check_answer = State()
     status_answer = State()
 
@@ -225,6 +223,15 @@ def get_outback_options():
     keyboard = InlineKeyboardMarkup(inline_keyboard=keyboard_list)
     return keyboard
 
+def get_unsure_options():
+    keyboard_list = [
+        [InlineKeyboardButton(text='Получить ответ на вопрос 📋', callback_data='get_answer')],
+        [InlineKeyboardButton(text='Переформулировать вопрос ❓', callback_data='ask_question')],
+        [InlineKeyboardButton(text='Вернуться назад 🏠', callback_data='back')]
+    ]
+    keyboard = InlineKeyboardMarkup(inline_keyboard=keyboard_list)
+    return keyboard
+
 # Клавиатуры сегмента Службы поддержки
 
 def support_options():
@@ -244,15 +251,7 @@ def support_users_options():
     keyboard = InlineKeyboardMarkup(inline_keyboard=keyboard_list)
     return keyboard
 
-def user_mark():
-    keyboard_list = [
-        [InlineKeyboardButton(text='Вопрос решен ✅', callback_data='accepted')],
-        [InlineKeyboardButton(text='Я не получил нужного ответа ❌', callback_data='not_accepted')]
-    ]
-    keyboard = InlineKeyboardMarkup(inline_keyboard=keyboard_list)
-    return keyboard
-
-def check_answer():
+def keyboard_check_answer():
     keyboard_list = [
         [InlineKeyboardButton(text='Отправить ответ 📤', callback_data='send_answer')],
         [InlineKeyboardButton(text='Перезаписать ответ ✍️', callback_data='write_again')],
@@ -296,7 +295,7 @@ async def start_process_feed(message: Message, state: FSMContext):
 
 #Команда для отправки запроса в поддержку
 
-@user_router.message(Command("request_to_kko"))
+@user_router.message(Command("request_to_support"))
 async def access_message(message: Message, state: FSMContext):
     await state.clear()
     async with ChatActionSender.typing(bot=bot, chat_id=message.chat.id):
@@ -341,8 +340,15 @@ async def role_process(call: CallbackQuery, state: FSMContext):
 async def back(call: CallbackQuery, state: FSMContext):
     data = await state.get_data()
     last_message_id = data.get("last_message_id")
-    if last_message_id:
-        await bot.delete_message(chat_id=call.from_user.id, message_id=last_message_id)  # Удаление последнего сообщения
+    message_to_edit = data.get("message_to_edit")
+    if message_to_edit is not None:
+        answer_text = data.get("answer_for_question")
+        await message_to_edit.edit_text(text = f"Найденная информация: \n\n" + answer_text, reply_markup = None, parse_mode = "Markdown")  # Удаление последнего сообщения
+    else:
+        if last_message_id:
+            await asyncio.sleep(0.5)
+            await bot.delete_message(chat_id=call.from_user.id,
+                                    message_id=last_message_id)  # Удаление последнего сообщения
     await asyncio.sleep(0.5)
     back_message = await call.message.answer(f"Выбери свой факультет: ",
                                                    reply_markup=get_faculty(), parse_mode="Markdown")
@@ -354,7 +360,7 @@ async def back(call: CallbackQuery, state: FSMContext):
     data = await state.get_data()
     message_to_edit = data.get("message_to_edit")
     last_message_id = data.get("last_message_id")
-    if message_to_edit:
+    if message_to_edit is not None:
         answer_text = data.get("answer_for_question")
         await message_to_edit.edit_text(text = f"Найденная информация: \n\n" + answer_text, reply_markup = None, parse_mode = "Markdown")  # Удаление последнего сообщения
     else:
@@ -389,6 +395,7 @@ async def answer_options(message: Message, state: FSMContext):
         faculty_name = data.get("faculty_name")
         ai_thinking_message = await message.answer(f"_Поиск ответа в базе данных_", parse_mode="Markdown")
         info_for_answer = await search(message.text, faculty_name)
+        await asyncio.sleep(0.5)
         await ai_thinking_message.delete()
         if info_for_answer.get("error") is not None:
             await message.answer("Произошла ошибка, сервис недоступен", parse_mode="Markdown")
@@ -399,11 +406,64 @@ async def answer_options(message: Message, state: FSMContext):
             await state.update_data(last_message_id=main_choice.message_id)
             await state.set_state(Faculties.request_allocation)
             return
+        elif info_for_answer.get("code"):
+            await asyncio.sleep(0.5)
+            unsure_approval_message = await message.answer(f"*Я нашел в базе этот вопрос: *\n\n" + info_for_answer.get("best_match") + "\n\n" + f"Выбери одну из нижних опций"
+                                               , reply_markup=get_unsure_options(), parse_mode="Markdown")
+            await state.update_data(message_to_edit=unsure_approval_message)
+            await state.update_data(info_for_answer = info_for_answer)
+            await state.set_state(Faculties.send_answer)
+            return
         answer_bot_message = await message.answer(f"Найденная информация: \n\n" + info_for_answer.get("answer"),
                                           reply_markup=get_outback_options(), parse_mode="Markdown")
         await state.update_data(message_to_edit = answer_bot_message)
         await state.update_data(answer_for_question = info_for_answer.get("answer"))
         await state.set_state(Faculties.request_allocation)
+
+@user_router.callback_query(F.data == 'get_answer', Faculties.send_answer)
+async def get_answer(call: CallbackQuery, state: FSMContext):
+    data = await state.get_data()
+    message_to_edit = data.get("message_to_edit")
+    info_for_answer = data.get("info_for_answer")
+    await asyncio.sleep(0.5)
+    await message_to_edit.edit_text(text = f"*Я нашел в базе этот вопрос: *\n\n" + info_for_answer.get("best_match"), reply_markup=None,
+                                        parse_mode="Markdown")
+    await asyncio.sleep(0.5)
+    answer_bot_message = await call.message.answer(f"Найденная информация: \n\n" + info_for_answer.get("answer"),
+                                              reply_markup=get_outback_options(), parse_mode="Markdown")
+    await state.update_data(message_to_edit=answer_bot_message)
+    await state.update_data(answer_for_question=info_for_answer.get("answer"))
+    await state.set_state(Faculties.request_allocation)
+
+@user_router.callback_query(F.data == 'ask_question', Faculties.send_answer)
+async def another_question(call: CallbackQuery, state: FSMContext):
+    data = await state.get_data()
+    message_to_edit = data.get("message_to_edit")
+    info_for_answer = data.get("info_for_answer")
+    await asyncio.sleep(0.5)
+    await message_to_edit.edit_text(text = f"*Я нашел в базе этот вопрос: *\n\n" + info_for_answer.get("best_match"), reply_markup=None,
+                                        parse_mode="Markdown")
+    await asyncio.sleep(0.5)
+    question_message = await call.message.answer(f"Напиши свой вопрос. " + "\n\n" +
+                                                 f"*Пример: *" + f"Получить справку об обучении КНТ.",
+                                                 parse_mode="Markdown")
+    await state.update_data(last_message_id=question_message.message_id)
+    await state.set_state(Faculties.send_answer)
+
+@user_router.callback_query(F.data == 'back', Faculties.send_answer)
+async def back_to_main(call: CallbackQuery, state: FSMContext):
+    data = await state.get_data()
+    message_to_edit = data.get("message_to_edit")
+    info_for_answer = data.get("info_for_answer")
+    await asyncio.sleep(0.5)
+    await message_to_edit.edit_text(text = f"*Я нашел в базе этот вопрос: *\n\n" + info_for_answer.get("best_match"), reply_markup=None,
+                                        parse_mode="Markdown")
+    await asyncio.sleep(0.5)
+    main_choice = await call.message.answer(f"*Вы хотите задать вопрос *" + "связанный с выбранным факультетом "
+                                       + f"*или обратиться *" + f"службу поддержки?"
+                                       , reply_markup=get_main_options_choice(), parse_mode="Markdown")
+    await state.update_data(last_message_id=main_choice.message_id)
+    await state.set_state(Faculties.request_allocation)
 
 
 @user_router.callback_query(F.data == 'support', Faculties.request_allocation)
@@ -457,8 +517,16 @@ async def back(call: CallbackQuery, state: FSMContext):
 @user_router.message(F.text, Support.get_id)
 async def get_id(message: Message, state: FSMContext):
     async with ChatActionSender.typing(bot=bot, chat_id=message.chat.id):
-        data = await state.get_data()
-        request_message = await message.answer( f"Пришлите " + f"*ответ на запрос*" + f" студента в формате одного сообщения.",
+        if not message.text.isdigit():
+            await asyncio.sleep(0.5)
+            feedback_message = await bot.send_message(chat_information[2],
+                                                      f"*ID студента* может состоять только из чисел.\n\nПришлите корректный вариант.",
+                                                      parse_mode="Markdown")
+            await state.update_data(last_message_id=feedback_message.message_id)
+            await state.set_state(Support.get_id)
+            return
+        await asyncio.sleep(0.5)
+        request_message = await bot.send_message(chat_information[2], f"Пришлите " + f"*ответ на запрос*" + f" студента в формате одного сообщения.",
                                        parse_mode="Markdown")
         await state.update_data(last_message_id=request_message.message_id)
         await state.update_data(user_id = int(message.text))
@@ -470,85 +538,56 @@ async def check_answer(message: Message, state: FSMContext):
         data = await state.get_data()
         last_message_id = data.get("last_message_id")
         user_id = data.get("user_id")
-        if last_message_id:
-            await bot.delete_message(chat_id=message.from_user.id,
-                                     message_id=last_message_id)  # Удаление последнего сообщения
-        check_message = await message.answer(f"Ваш ответ на запрос: " + "\n\n" + f"{message.text}" + '\n\n' + f"*ID студента: *" + "\n" + str(
+        await asyncio.sleep(0.5)
+        await asyncio.sleep(0.5)
+        check_message = await bot.send_message(chat_information[2], f"Ваш ответ на запрос: " + "\n\n" + f"{message.text}" + '\n\n' + f"*ID студента: *" + "\n" + str(
                                         user_id),
-                                             reply_markup=support_users_options(), parse_mode="Markdown")
+                                             reply_markup = keyboard_check_answer(), parse_mode="Markdown")
         await state.update_data(ans_message = message.text)
+        await state.update_data(message_to_edit = check_message)
         await state.update_data(last_message_id=check_message.message_id)
         await state.set_state(Support.status_answer)
 
 @user_router.callback_query(F.data == 'send_answer', Support.status_answer)
 async def status_answer(call: CallbackQuery, state: FSMContext):
     data = await state.get_data()
-    last_message_id = data.get("last_message_id")
     ans_message = data.get("ans_message")
     user_id = data.get("user_id")
-    if last_message_id:
-        await bot.delete_message(chat_id=call.from_user.id, message_id=last_message_id)  # Удаление последнего сообщения
+    message_to_edit = data.get("message_to_edit")
     await asyncio.sleep(0.5)
-    await call.message.answer(f"_Ваш ответ на запрос отправлен._",
+    if message_to_edit is not None:
+        await message_to_edit.edit_text(f"Ваш ответ на запрос: " + "\n\n" + f"{ans_message}" + '\n\n' + f"*ID студента: *" + "\n" + str(
+                                        user_id), reply_markup=None,
+                                        parse_mode="Markdown")  # Удаление последнего сообщения
+    await asyncio.sleep(0.5)
+    await bot.send_message(chat_information[2],f"_Ваш ответ на запрос отправлен._",
                                           parse_mode="Markdown")
-    await bot.send_message(user_id, f"*Ответ на запрос от службы поддержки: *" + "\n\n" + f"{ans_message}",
-                         reply_markup=user_mark(), parse_mode="Markdown")
-    await state.set_state(Support.feedback_answer)
+    await bot.send_message(user_id, f"*Ответ на запрос от службы поддержки: *" + "\n\n" + f"{ans_message}\n\n"
+                                                                                          f"_Если ты не получил ответ на свой вопрос, то можешь обратиться к одному из сотрудников службы поддержки: _"
+                           + chat_information[1], parse_mode="Markdown")
+    return
 
 @user_router.callback_query(F.data == 'write_again', Support.status_answer)
 async def status_answer(call: CallbackQuery, state: FSMContext):
     data = await state.get_data()
-    last_message_id = data.get("last_message_id")
-    if last_message_id:
-        await bot.delete_message(chat_id=call.from_user.id, message_id=last_message_id)  # Удаление последнего сообщения
     await asyncio.sleep(0.5)
     request_message = await bot.send_message(chat_information[2], f"Пришлите " + f"*ответ на запрос*" + f" студента в формате одного сообщения.",
                                            parse_mode="Markdown")
     await state.update_data(last_message_id=request_message.message_id)
     await state.set_state(Support.check_answer)
 
-@user_router.callback_query(F.data == 'write_again', Support.status_answer)
-async def status_answer(call: CallbackQuery, state: FSMContext):
-    async with ChatActionSender.typing(bot=bot, chat_id=call.chat.id):
-        data = await state.get_data()
-        last_message_id = data.get("last_message_id")
-        if last_message_id:
-            await bot.delete_message(chat_id=call.from_user.id,
-                                     message_id=last_message_id)  # Удаление последнего сообщения
-        request_message = await bot.send_message(chat_information[2],
-                                                 f"Пришлите " + f"*ответ на запрос*" + f" студента в формате одного сообщения.",
-                                                 parse_mode="Markdown")
-        await state.update_data(last_message_id=request_message.message_id)
-        await state.set_state(Support.check_answer)
-
 @user_router.callback_query(F.data == 'back', Support.status_answer)
 async def status_answer(call: CallbackQuery, state: FSMContext):
     data = await state.get_data()
     last_message_id = data.get("last_message_id")
+    await asyncio.sleep(0.5)
     if last_message_id:
-        await bot.delete_message(chat_id=call.from_user.id, message_id=last_message_id)  # Удаление последнего сообщения
+        await bot.delete_message(chat_id=chat_information[2], message_id=last_message_id)  # Удаление последнего сообщения
     await asyncio.sleep(0.5)
     feedback_message = await bot.send_message(chat_information[2], f"Пришлите" + f"* ID студента,*" + f" которому отвечаете.",
                                                  parse_mode="Markdown")
     await state.update_data(last_message_id=feedback_message.message_id)
     await state.set_state(Support.get_id)
-
-@user_router.callback_query(F.data == 'accepted', Support.feedback_answer)
-async def feedback_answer(call: CallbackQuery, state: FSMContext):
-    await call.message.answer(f"_Рад тебе помочь!_", parse_mode="Markdown")
-    next_message = await call.message.answer(f"Выбери свой факультет: ",
-                                            reply_markup=get_faculty(), parse_mode="Markdown")
-    await state.update_data(last_message_id=next_message.message_id)
-    await state.set_state(MainStates.problem_types)
-
-@user_router.callback_query(F.data == 'not_accepted', Support.feedback_answer)
-async def feedback_answer(call: CallbackQuery, state: FSMContext):
-    await call.message.answer(f"Ты можешь обратиться к одному из сотрудников" + f"* службы поддержки:*" + "\n\n" + chat_information[1],
-                         parse_mode="Markdown")
-    next_message = call.message.answer(f"Выбери свой факультет: ",
-                                            reply_markup=get_faculty(), parse_mode="Markdown")
-    await state.update_data(last_message_id=next_message.message_id)
-    await state.set_state(MainStates.problem_types)
 
 @user_router.callback_query(F.data == 'write_request', Support.back_request)
 async def status_answer(call: CallbackQuery, state: FSMContext):
@@ -565,15 +604,11 @@ async def status_answer(call: CallbackQuery, state: FSMContext):
 @user_router.message(F.text, Support.back_request)
 async def request_check(message: Message, state: FSMContext):
     put_request_message(f"{message.text}")
-    data = await state.get_data()
-    last_message_id = data.get("last_message_id")
-    if last_message_id:
-        await bot.delete_message(chat_id=message.from_user.id, message_id=last_message_id)
     await asyncio.sleep(0.5)
     request_message = await message.answer(f"Ваш запрос выглядит так: " + "\n\n" + f"{message.text}" + "\n\n" +
                                            f"*Проверьте, написали ли вы:*" + f"учебную группу, факультет, ФИО.",
                                            reply_markup=support_users_options(), parse_mode="Markdown")
-    await state.update_data(last_message_id=request_message.message_id)
+    await state.update_data(message_to_edit=request_message)
     await state.set_state(Support.back_request)
 
 @user_router.callback_query(F.data == 'back', Support.back_request)
@@ -591,14 +626,16 @@ async def status_answer(call: CallbackQuery, state: FSMContext):
 @user_router.callback_query(F.data == 'send_request', Support.back_request)
 async def status_answer(call: CallbackQuery, state: FSMContext):
     data = await state.get_data()
-    last_message_id = data.get("last_message_id")
-    if last_message_id:
-        await bot.delete_message(chat_id=call.from_user.id, message_id=last_message_id)  # Удаление последнего сообщения
+    message_to_edit = data.get("message_to_edit")
+    await asyncio.sleep(0.5)
+    if message_to_edit is not None:
+        await message_to_edit.edit_text(f"Ваш запрос выглядит так: " + "\n\n" + f"{request_message}", reply_markup = None, parse_mode = "Markdown")  # Удаление последнего сообщения
     await asyncio.sleep(0.5)
     await bot.send_message(chat_information[2], f"*Запрос от студента: *" + "\n\n" + f"{request_message}" + "\n\n" + f"*ID студента: *" + "\n" + str(
-                             call.message.from_user.id), parse_mode="Markdown")
-    await call.message.answer(f"Ваш запрос " + f"направлен " + f"*в службу поддержки.*" + "\n\n" +
+                             call.from_user.id), parse_mode="Markdown")
+    await call.message.answer(f"Запрос " + f"направлен " + f"*в службу поддержки.*" + "\n\n" +
                          f"Максимальное время ответа - " + f"*2 дня.*", parse_mode="Markdown")
+    return
 
 
 # Request for KKO

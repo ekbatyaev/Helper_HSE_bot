@@ -1,6 +1,5 @@
 import asyncio
 import os
-
 import torch
 import requests
 import json
@@ -172,5 +171,5 @@ async def save_data(data_file, data):
 
 
 if __name__ == "__main__":
-    asyncio.run(search("Как получить справку об обучении?", "fac_it"))
+    asyncio.run(search("Букинема", "fac_it"))
 
